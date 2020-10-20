@@ -8,51 +8,18 @@ import sys
 import subprocess
 import shutil
 
-if sys.version_info[0] < 3:
+if sys.version_info < (3,8):
 	raise Exception("Must be using Python 3")
 
-try:
-	from prometheus_client import REGISTRY, Counter, write_to_textfile
-
-	log_entries = Counter(
-		'python_logging_messages_total',
-		'Count of log entries by logger and level.',
-		['logger', 'level'], registry=REGISTRY)
-
-
-	class ExportingLogHandler(logging.Handler):
-		"""A LogHandler that exports logging metrics for Prometheus.io."""
-		def emit(self, record):
-			log_entries.labels(record.name, record.levelname).inc()
-
-
-	def export_stats_on_root_logger():
-		"""Attaches an ExportingLogHandler to the root logger.
-		This should be sufficient to get metrics about all logging in a
-		Python application, unless a part of the application defines its
-		own logger and sets this logger's `propagate` attribute to
-		False. The `propagate` attribute is True by default, which means
-		that by default all loggers propagate all their logged messages to
-		the root logger.
-		"""
-		logger = logging.getLogger()
-		logger.addHandler(ExportingLogHandler())
-		logger.setLevel(logging.DEBUG)
-
-	export_stats_on_root_logger()
-
-except Exception as e:
-	print(e)
-
+# ffprobe
 ffprobe_path = shutil.which("ffprobe")
 
 probe_codec_command = [ffprobe_path, "-v", "error", "-select_streams",  "v:0", "-show_entries", "stream=codec_name", "-of" , "default=noprint_wrappers=1:nokey=1"]
 probe_duration_command = [ffprobe_path, "-v", "error", "-show_entries", "format=duration", "-of" , "default=noprint_wrappers=1:nokey=1"]
 
+# codec & configurations
 output_video_codec = "hevc"
 video_codecs = ["hevc", "h264", "dvvideo", "mpeg4", "msmpeg4v3", "dnxhd"]
-
-skip_ext = [".srt", ".jpg", ".txt", ".py", ".pyc"]
 
 default_container_by_codec = {
 	"hevc" : ".mkv",
@@ -66,11 +33,84 @@ default_video_encoder_args_by_codec = {
 	"vp9" : " -c:v libvpx-vp9 -crf 30 -b:v 2000k "
 }
 
+# extensions to ignore
+skip_ext = [".srt", ".jpg", ".txt", ".py", ".pyc"]
+
+# stats
 total_saved = 0.0
 
 infos = []
 errors = []
 warnings = []
+
+use_prometheus = False
+
+def setup_logging(args):
+	global use_prometheus
+
+	logger = logging.getLogger()
+	logger.setLevel(logging.DEBUG)
+
+	# create formatter and add it to the handlers
+	formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+	# setup prometheus if specified
+	if args.use_prometheus is True:
+		use_prometheus = True
+		try:
+			from prometheus_client import REGISTRY, Counter
+
+			log_entries = Counter(
+				'python_logging_messages_total',
+				'Count of log entries by logger and level.',
+				['logger', 'level'], registry=REGISTRY)
+
+
+			class ExportingLogHandler(logging.Handler):
+				"""A LogHandler that exports logging metrics for Prometheus.io."""
+				def emit(self, record):
+					log_entries.labels(record.name, record.levelname).inc()
+
+
+			def export_stats_on_root_logger():
+				"""Attaches an ExportingLogHandler to the root logger.
+				This should be sufficient to get metrics about all logging in a
+				Python application, unless a part of the application defines its
+				own logger and sets this logger's `propagate` attribute to
+				False. The `propagate` attribute is True by default, which means
+				that by default all loggers propagate all their logged messages to
+				the root logger.
+				"""
+				logger.addHandler(ExportingLogHandler())
+
+
+			export_stats_on_root_logger()
+
+		except Exception as error:
+			print("Error setting prometheus logging: %s" % (error))
+			sys.exit(1)
+
+	# end prometheus 
+
+	# create file handler which logs even debug message
+	fh = logging.FileHandler(args.log_path)
+	fh.setLevel(logging.DEBUG)
+
+	# create console handler with a higher log level
+	ch = logging.StreamHandler()
+	ch.setLevel(logging.INFO)
+
+	# set formatter
+	fh.setFormatter(formatter)
+	ch.setFormatter(formatter)
+
+	logger.addHandler(ch)
+	logger.addHandler(fh)
+
+def close_logging():
+	if use_prometheus:
+		from prometheus_client import REGISTRY, write_to_textfile
+		write_to_textfile('transcode.prom', REGISTRY)
 
 def handle_info(info):
 	infos.append(info)
@@ -130,9 +170,12 @@ def print_summary():
 	print("")
 
 def signal_handler(sig, frame):
-	print("\nInterupted...")
+	logging.error("Interupted")
+
+	close_logging()
 	print_summary()
-	sys.exit(0)
+	
+	sys.exit(1)
 
 def fetch_codec_name(path):
 	_, ext = os.path.splitext(path)
@@ -256,10 +299,18 @@ def transcode(input_dir, output_dir, encoder_args, duration_diff_tolerance_in_fr
 
 			handle_info("Job Done: %s %s" % (output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)))
 
-parser = argparse.ArgumentParser(description="tabarnard.py: transcode utility script")
-parser.add_argument("--inputdir", type=str, default=".", dest="input_dir", help="directory where your media files are found")
-parser.add_argument("--outputdir", type=str, default=".", dest="output_dir", help="directory where your media files are outputted")
+parser = argparse.ArgumentParser(description="tabarnak.py: transcode utility script")
+parser.add_argument("--input-dir", type=str, default=".", dest="input_dir", help="directory where your media files are found")
+parser.add_argument("--output-dir", type=str, default=".", dest="output_dir", help="directory where your media files are outputted")
+
 parser.add_argument("--verbose", default=False, action="store_true", dest="verbose", help="verbose")
+
+# logging
+parser.add_argument("--log-path", type=str, default="tabarnak.log", dest="log_path", help="log path")
+parser.add_argument("--use-prometheus-logging", default=True, action="store_true", dest="use_prometheus", help="use prometheus for logging")
+
+
+
 parser.add_argument("--copy", default=False, dest="copy_others", action="store_true", help="copy hevc source files and other files")
 parser.add_argument("--default-map", default=False, action="store_true", dest="default_map", help="use ffmpeg default mapping instead of mapping all streams which might not be supported by mkv container")
 parser.add_argument("--map-args", type=str, default=None, dest="map_args", help="specify ffmpeg map arguments")
@@ -273,6 +324,8 @@ parser.add_argument("--vp9", action="store_const", const="vp9", dest="video_code
 
 
 args = parser.parse_args()
+
+setup_logging(args)
 
 # setup signal interupt handler
 signal.signal(signal.SIGINT, signal_handler)
@@ -304,7 +357,8 @@ print_summary()
 
 logging.info("Finished")
 
-write_to_textfile('transcode.prom', REGISTRY)
+close_logging()
+
 
 
 
