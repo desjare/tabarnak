@@ -1,4 +1,6 @@
 output
+test_output*
+test_*.txt
 *.pyc
 *.log
 *.prom

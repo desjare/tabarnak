@@ -251,7 +251,7 @@ def compare_input_output(input_file, output_file, input_codec_name, duration_dif
 
 	return (input_file_size, output_file_size, saved, saved_percent, total_saved)
 
-def transcode(input_dir, output_dir, encoder_args, duration_diff_tolerance_in_frames, percent_tolerance, copy_others):
+def transcode(input_dir, output_dir, output_suffix, encoder_args, duration_diff_tolerance_in_frames, percent_tolerance, copy_others):
 	global total_saved
 
 	for root, _, files in os.walk(input_dir, topdown=False):
@@ -272,7 +272,7 @@ def transcode(input_dir, output_dir, encoder_args, duration_diff_tolerance_in_fr
 				continue
 
 			output_filename, ext = os.path.splitext(source_filename)
-			output_filename += default_container_by_codec.get(output_video_codec)
+			output_filename += output_suffix + default_container_by_codec.get(output_video_codec)
 
 			if ext.lower() in skip_ext:
 				continue
@@ -304,9 +304,11 @@ def transcode(input_dir, output_dir, encoder_args, duration_diff_tolerance_in_fr
 parser = argparse.ArgumentParser(description="tabarnak.py: transcode utility script")
 parser.add_argument("--input-dir", type=str, default=".", dest="input_dir", help="directory where your media files are found")
 parser.add_argument("--output-dir", type=str, default=".", dest="output_dir", help="directory where your media files are outputted")
+parser.add_argument("--output-suffix", type=str, default="", dest="output_suffix", help="suffix to add to the output file")
 
 # logging
 parser.add_argument("--log-path", type=str, default="tabarnak.log", dest="log_path", help="log path")
+parser.add_argument("--prometheus-log-path", type=str, default="tabarnak.prom", dest="prometheus_log_path", help="prometheus log path")
 parser.add_argument("--use-prometheus-logging", default=True, action="store_true", dest="use_prometheus", help="use prometheus for logging")
 
 
@@ -351,7 +353,7 @@ else:
 if args.output_dir is not None:
 	os.makedirs(args.output_dir, exist_ok=True)
 
-transcode(args.input_dir, args.output_dir, encoder_args, args.duration_diff_tolerance_in_frames, args.percent_tolerance, args.copy_others)
+transcode(args.input_dir, args.output_dir, args.output_suffix, encoder_args, args.duration_diff_tolerance_in_frames, args.percent_tolerance, args.copy_others)
 
 print_summary()
 
