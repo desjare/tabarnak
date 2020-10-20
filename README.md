@@ -1,4 +1,4 @@
-# tabarnak
+# tabarnak - transcode utility script
 
 # Description
 This script is used to convert or media file to modern codec such as hevc, vp9 or av1 (experimental). It walks into a directory and probes media files for video that are not encoded with specified codec (default hevc). Than it transcodes them. The idea is to use a more modern codec that has a better quality/bitrate ratio. Resulting files are significantly smaller than original h264, mpeg2, mpeg4 or likely any other formats that they are currently encoded to.
