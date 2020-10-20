@@ -9,7 +9,7 @@ import subprocess
 import shutil
 
 if sys.version_info < (3,8):
-	raise Exception("Must be using Python 3")
+	raise Exception("Must be using Python 3.8")
 
 # ffprobe
 ffprobe_path = shutil.which("ffprobe")
@@ -104,6 +104,7 @@ def setup_logging(args):
 	fh.setFormatter(formatter)
 	ch.setFormatter(formatter)
 
+	# add handler
 	logger.addHandler(ch)
 	logger.addHandler(fh)
 
@@ -112,15 +113,15 @@ def close_logging():
 		from prometheus_client import REGISTRY, write_to_textfile
 		write_to_textfile('transcode.prom', REGISTRY)
 
-def handle_info(info):
+def log_info(info):
 	infos.append(info)
 	logging.info(info)
 
-def handle_warning(warning):
+def log_warning(warning):
 	warnings.append(warning)
 	logging.warning(warning)
 
-def handle_error(error):
+def log_error(error):
 	errors.append(error)
 	logging.error(error)
 
@@ -133,11 +134,11 @@ def run_command(cmd):
 	return True
 
 def remove_file(output_file):
-	handle_info("Removing %s" % (output_file))
+	log_info("Removing %s" % (output_file))
 	try:
 		os.remove(output_file)
 	except Exception as e:
-		handle_error("Cannot remove %s:%s"  % (output_file, e))
+		log_error("Cannot remove %s:%s"  % (output_file, e))
 
 def format_size(num, suffix='B'):
     for unit in ['','K','M','G','T','P','E','Z']:
@@ -156,18 +157,20 @@ def format_input_output(input_file_size, output_file_size, saved, saved_percent,
 	return "Input Size: %s Output Size: %s Saved: %s %2.2f percent Total %s" % (input_fmt, output_fmt, saved_fmt, saved_percent, total_saved_fmt)
 
 def print_summary():
-	print("Summary: ")
+	print("Summary:\n")
 
 	print("\n".join(infos))
 	print("")
 
-	print("Warnings:")
-	print("\n".join(warnings))
-	print("")
+	if len(warnings) > 0:
+		print("Warnings:")
+		print("\n".join(warnings))
+		print("")
 
-	print("Errors:")
-	print("\n".join(errors))
-	print("")
+	if len(errors) > 0:
+		print("Errors:")
+		print("\n".join(errors))
+		print("")
 
 def signal_handler(sig, frame):
 	logging.error("Interupted")
@@ -187,12 +190,12 @@ def fetch_codec_name(path):
 
 	results = subprocess.run(check_output_command, stdout=subprocess.PIPE)
 	if results.returncode != 0:
-		handle_error("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
+		log_error("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
 		return ""
 	codec = results.stdout.decode('utf-8').replace("\n","")
 
 	if codec == "" or codec not in video_codecs:
-		handle_error("Invalid codec \"%s\" for %s" % (codec, path))
+		log_error("Invalid codec \"%s\" for %s" % (codec, path))
 		return ""
 
 	return codec
@@ -207,7 +210,7 @@ def fetch_duration_in_frames(path):
 
 	results = subprocess.run(check_output_command, stdout=subprocess.PIPE)
 	if results.returncode != 0:
-		handle_error("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
+		log_error("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
 		return 0
 	duration = results.stdout.decode('utf-8').replace("\n","")
 
@@ -218,7 +221,7 @@ def fetch_duration_in_frames(path):
 		pass
 
 	if int(frame_duration) == 0:
-		handle_error("Zero Duration for %s" % (path))
+		log_error("Zero Duration for %s" % (path))
 
 	return int(frame_duration)
 
@@ -235,7 +238,7 @@ def compare_input_output(input_file, output_file, input_codec_name, duration_dif
 	duration_diff = abs(input_duration - output_duration)
 	if duration_diff > duration_diff_tolerance_in_frames:
 		delta_in_frames = output_duration - input_duration
-		handle_error("Duration differs input: %s:%d frames output %s:%d frames out duration - in duration:%d frames" % (input_name, input_duration, output_name, output_duration, delta_in_frames))
+		log_error("Duration differs input: %s:%d frames output %s:%d frames out duration - in duration:%d frames" % (input_name, input_duration, output_name, output_duration, delta_in_frames))
 
 	input_file_size = os.path.getsize(input_file)
 	output_file_size= os.path.getsize(output_file)
@@ -244,11 +247,11 @@ def compare_input_output(input_file, output_file, input_codec_name, duration_dif
 	total_saved += saved
 
 	if saved_percent > percent_tolerance:
-		handle_warning("File size percent difference is too high: %2.2f for file %s  Input codec %s" % (saved_percent, os.path.basename(output_file), input_codec_name))
+		log_warning("File size percent difference is too high: %2.2f for file %s  Input codec %s" % (saved_percent, os.path.basename(output_file), input_codec_name))
 
 	return (input_file_size, output_file_size, saved, saved_percent, total_saved)
 
-def transcode(input_dir, output_dir, encoder_args, duration_diff_tolerance_in_frames, percent_tolerance, copy_others, verbose):
+def transcode(input_dir, output_dir, encoder_args, duration_diff_tolerance_in_frames, percent_tolerance, copy_others):
 	global total_saved
 
 	for root, _, files in os.walk(input_dir, topdown=False):
@@ -257,13 +260,13 @@ def transcode(input_dir, output_dir, encoder_args, duration_diff_tolerance_in_fr
 
 			codec_name = fetch_codec_name(source_filename)
 			if codec_name == "" or codec_name == output_video_codec:
-				if verbose is True:
-					handle_info("Skipping %s codec \"%s\"" % (name, codec_name))
+				
+				logging.debug("Skipping %s codec \"%s\"" % (name, codec_name))
 
 				if copy_others is True:
 					dest_filename = os.path.join(output_dir, os.path.basename(source_filename))
 					if os.path.exists(dest_filename) is False:
-						handle_info("Copying %s" % (dest_filename))
+						log_info("Copying %s" % (dest_filename))
 						shutil.copyfile(source_filename, dest_filename)
 
 				continue
@@ -280,30 +283,27 @@ def transcode(input_dir, output_dir, encoder_args, duration_diff_tolerance_in_fr
 
 				input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename,output_file, codec_name, duration_diff_tolerance_in_frames, percent_tolerance)
 
-				if verbose is True:
-					handle_info("Skipping %s exists. %s" % (output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)))
+				logging.debug("Skipping %s exists. %s" % (output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)))
 
 				continue
 
 			cmd = "ffmpeg -i \"%s\" %s \"%s\"" % (source_filename, encoder_args, output_file)
-			handle_info("Running: %s" % (cmd))
+			log_info("Running: %s" % (cmd))
 			outcome = run_command(cmd)
 			if outcome is False:
 
-				handle_error("Error running %s" % (cmd))
+				log_error("Error running %s" % (cmd))
 				remove_file(output_file)
 
 				continue
 
 			input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename, output_file, codec_name, duration_diff_tolerance_in_frames, percent_tolerance)
 
-			handle_info("Job Done: %s %s" % (output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)))
+			log_info("Job Done: %s %s" % (output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)))
 
 parser = argparse.ArgumentParser(description="tabarnak.py: transcode utility script")
 parser.add_argument("--input-dir", type=str, default=".", dest="input_dir", help="directory where your media files are found")
 parser.add_argument("--output-dir", type=str, default=".", dest="output_dir", help="directory where your media files are outputted")
-
-parser.add_argument("--verbose", default=False, action="store_true", dest="verbose", help="verbose")
 
 # logging
 parser.add_argument("--log-path", type=str, default="tabarnak.log", dest="log_path", help="log path")
@@ -351,7 +351,7 @@ else:
 if args.output_dir is not None:
 	os.makedirs(args.output_dir, exist_ok=True)
 
-transcode(args.input_dir, args.output_dir, encoder_args, args.duration_diff_tolerance_in_frames, args.percent_tolerance, args.copy_others, args.verbose)
+transcode(args.input_dir, args.output_dir, encoder_args, args.duration_diff_tolerance_in_frames, args.percent_tolerance, args.copy_others)
 
 print_summary()
 
