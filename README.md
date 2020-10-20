@@ -1,13 +1,13 @@
 # tabarnak - transcode utility script
 
 # Description
-This script is used to convert or media file to modern codec such as hevc, vp9 or av1 (experimental). It walks into a directory and probes media files for video that are not encoded with specified codec (default hevc). Than it transcodes them. The idea is to use a more modern codec that has a better quality/bitrate ratio. Resulting files are significantly smaller than original h264, mpeg2, mpeg4 or likely any other formats that they are currently encoded to.
+This script is used to convert video or video/audio media files to modern codecs such as HEVC, VP9 or AV1 (experimental). It walks into a directory and probes media files for video that are not encoded with specified codec (default HEVC). Then it transcodes them. The idea is to use a more modern codec that has a better quality/bitrate ratio. Resulting files are significantly smaller than original h264, mpeg2, mpeg4 or likely any other formats that they are currently encoded to.
 
 tabarnak.py uses [crf](https://trac.ffmpeg.org/wiki/Encode/H.265) encoding. All channels are copied. The audio is converted by ffmpeg to ogg vorbis by default.
 
-tabarnak.py won't delete or clean up your files. It will skipped files that are already done. Basic sanity check is performed after encoding and it will print a warning if the input and output size does not match.
+tabarnak.py won’t delete or clean up your files. It will skip files that are already done. Basic sanity check is performed after encoding and it will print a warning if the input and output size do not match.
 
-If you plan to use your media files with a chromecast, be sure the buy **chromecast ultra** since the 3rd generation chromecast does not support hevc.
+If you plan to use your media files with a chrome cast, be sure the buy **chromecast ultra** since the 3rd generation chromecast does not support HEVC.
 
 ## Usage
 
