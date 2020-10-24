@@ -1,11 +1,22 @@
 """
 Tabarnak transcoder base unittest.TestCase classes
 """
+# pylint: disable=no-self-use
 
 import os
 import time
 import shutil
+import subprocess
 import unittest
+
+ffprobe_path = shutil.which("ffprobe")
+
+probe_cmd = [ffprobe_path, "-v", "error"]
+probe_of = ["-of" , "default=noprint_wrappers=1:nokey=1"]
+probe_vstream = ["-select_streams",  "v:0"]
+probe_codec_cmd = probe_cmd + probe_vstream + ["-show_entries", "stream=codec_name"] + probe_of
+probe_duration_cmd = probe_cmd + ["-show_entries", "format=duration"] + probe_of
+
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -79,3 +90,35 @@ class TabarnakTestCase(unittest.TestCase):
         if exc_list and exc_list[-1][0] is self:
             return exc_list[-1][1]
         return None
+
+
+    def fetch_codec_name(self, path):
+        """
+        return codec name of a media file giving its path
+        """
+
+        check_output_cmd = probe_codec_cmd.copy()
+        check_output_cmd += [path]
+
+        results = subprocess.run(check_output_cmd, stdout=subprocess.PIPE, check=True)
+        codec = results.stdout.decode('utf-8').replace("\n","")
+
+        return codec
+
+    def fetch_duration_in_frames(self, path):
+        """
+        fetch duration in frames (int) of a media file giving its path
+        """
+        check_output_cmd = probe_duration_cmd.copy()
+        check_output_cmd += [path]
+
+        results = subprocess.run(check_output_cmd, stdout=subprocess.PIPE, check=True)
+        duration = results.stdout.decode('utf-8').replace("\n","")
+
+        frame_duration = 0.0
+        try:
+            frame_duration = float(duration)
+        except ValueError:
+            pass
+
+        return int(frame_duration)
