@@ -27,9 +27,25 @@ class TestBAT(TabarnakTestCase):
 
             cmd = self.tabarnak_cmd + ["--input-dir", input_dir] + self.tarbarnak_log_args
 
-            results = subprocess.run(cmd, stdout=cmd_stdout, stderr=cmd_stderr, check=True)
+            results = subprocess.run(cmd, stdout=cmd_stdout, stderr=cmd_stderr, check=False)
 
         self.assertEqual(results.returncode, 0)
+
+    def test_basic_failure(self):
+        """
+        test basic failure: invalid argument
+        """
+
+        with open(self.stdout_path, "w+") as cmd_stdout, open(self.stderr_path, "w+") as cmd_stderr:
+
+            input_dir = os.path.join(test_dir, "BAT", "H264")
+            args = ["--input-dir", input_dir, "--invalid-args"]
+            cmd = self.tabarnak_cmd + args + self.tarbarnak_log_args
+
+            results = subprocess.run(cmd, stdout=cmd_stdout, stderr=cmd_stderr, check=False)
+
+        self.assertEqual(results.returncode, 2)
+
 
 if __name__ == '__main__':
     unittest.main()

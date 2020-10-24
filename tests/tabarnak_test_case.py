@@ -54,17 +54,17 @@ class TabarnakTestCase(unittest.TestCase):
 
             if not is_ok:
                 try:
-                    with open(self.stdout_path, "w+") as cmd_stdout:
-                        print("Outputing stdout:\n%s" % (cmd_stdout.read()))
+                    with open(self.stdout_path, "r") as cmd_stdout:
+                        print("\nOutputing stdout:\n%s" % (cmd_stdout.read()))
                 except IOError as error:
-                    print("Error outputing stderr %s" %(error))
+                    print("Error outputing stderr %s" % (error))
 
                 try:
-                    with open(self.stderr_path, "w+") as cmd_stderr:
-                        print("Outputing stdout:\n%s" % (cmd_stderr.read()))
+                    with open(self.stderr_path, "r") as cmd_stderr:
+                        print("\nOutputing stderr:\n%s" % (cmd_stderr.read()))
 
                 except IOError as error:
-                    print("Error outputing stderr %s" %(error))
+                    print("Error outputing stderr %s" % (error))
 
         shutil.rmtree(self.output_dir, ignore_errors=True)
         self.output_dir = None

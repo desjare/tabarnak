@@ -1,4 +1,10 @@
 #!/usr/bin/python3
+"""
+tabarnak - transcode all basically accessible resolutely not all Klingon transcode utility tool
+"""
+# pylint: disable=line-too-long
+# pylint: disable=import-outside-toplevel
+# pylint: disable=too-many-locals
 
 import argparse
 import logging
@@ -21,8 +27,8 @@ probe_codec_cmd = probe_cmd + probe_vstream + ["-show_entries", "stream=codec_na
 probe_duration_cmd = probe_cmd + ["-show_entries", "format=duration"] + probe_of
 
 # codec & configurations
-output_video_codec = "hevc"
-video_codecs = ["hevc", "h264", "dvvideo", "mpeg4", "msmpeg4v3", "dnxhd"]
+OUTPUT_VIDEO_CODEC = "hevc"
+VIDEO_CODECS = ["hevc", "h264", "dvvideo", "mpeg4", "msmpeg4v3", "dnxhd"]
 
 default_container_by_codec = {
     "hevc" : ".mkv",
@@ -39,17 +45,63 @@ default_video_encoder_args_by_codec = {
 # extensions to ignore
 skip_ext = [".srt", ".jpg", ".txt", ".py", ".pyc"]
 
-# stats
-total_saved = 0.0
-
 infos = []
 errors = []
 warnings = []
 
-use_prometheus = False
+class TranscoderArgs:
+    """
+    transcoder arguments and options
+    """
+    def __init__(self, encoder_args, duration_diff_tolerance, percent_tolerance):
+        self.encoder_args = encoder_args
+        self.duration_diff_tolerance_in_frames = duration_diff_tolerance
+        self.percent_tolerance = percent_tolerance
 
-def setup_logging(args):
-    global use_prometheus
+    def get_encoder_args(self):
+        """
+        fetch encoder arguments for ffmpeg
+        """
+        return self.encoder_args
+
+    def get_diff_tolerance_in_frames(self):
+        """
+        fetch diff tolerance in frames
+        """
+        return self.duration_diff_tolerance_in_frames
+
+    def get_percent_tolerance(self):
+        """
+        fetch percent tolerance
+        """
+        return self.percent_tolerance
+
+class Stats:
+    """
+    transcoder Stats class
+    """
+    def __init__(self):
+        # define collected stats
+        self.total_saved = 0.0
+
+    def increment_total_saved(self, value):
+        """
+        increment total saved value in bytes
+        """
+        self.total_saved += value
+
+    def get_total_saved(self):
+        """
+        fetch total saved bytes
+        """
+        return self.total_saved
+
+
+def setup_logging():
+    """
+    setup logging. Add file & console logging handlers.
+    If we are using prometheus setup prometheus logging.
+    """
 
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
@@ -59,7 +111,6 @@ def setup_logging(args):
 
     # setup prometheus if specified
     if args.use_prometheus is True:
-        use_prometheus = True
         try:
             from prometheus_client import REGISTRY, Counter
 
@@ -89,61 +140,81 @@ def setup_logging(args):
 
             export_stats_on_root_logger()
 
-        except Exception as error:
+        except ImportError as error:
             print("Error setting prometheus logging: %s" % (error))
             sys.exit(1)
 
     # end prometheus
 
     # create file handler which logs even debug message
-    fh = logging.FileHandler(args.log_path)
-    fh.setLevel(logging.DEBUG)
+    file_handler = logging.FileHandler(args.log_path)
+    file_handler.setLevel(logging.DEBUG)
 
     # create console handler with a higher log level
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
 
     # set formatter
-    fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
 
-    # add handler
-    logger.addHandler(ch)
-    logger.addHandler(fh)
+    # add handlers
+    logger.addHandler(console_handler)
+    logger.addHandler(console_handler)
 
 def close_logging():
-    if use_prometheus:
+    """
+    close logging. If prometheus is enabaled, dump the REGISTRY to file
+    """
+    if args.use_prometheus:
         from prometheus_client import REGISTRY, write_to_textfile
         write_to_textfile('transcode.prom', REGISTRY)
 
 def log_info(info):
+    """
+    log info and append to info logging list
+    """
     infos.append(info)
     logging.info(info)
 
 def log_warning(warning):
+    """
+    log warning and append to warning logging list
+    """
     warnings.append(warning)
     logging.warning(warning)
 
 def log_error(error):
+    """
+    log error and append to error logging list
+    """
     errors.append(error)
     logging.error(error)
 
 def run_cmd(cmd):
+    """
+    run a command using os.system. return True if status is 0 False otherwise
+    """
     status = os.system(cmd)
     if status != 0:
-        print("Error: running cmd: %s" % (cmd, ))
-        print("Error: return status: %d" % (status))
+        logging.error("running cmd: %s failed status %d", cmd, status)
         return False
     return True
 
 def remove_file(output_file):
+    """
+    remove a file and ignore exception
+    """
     log_info("Removing %s" % (output_file))
     try:
         os.remove(output_file)
-    except Exception as e:
-        log_error("Cannot remove %s:%s"  % (output_file, e))
+    except IsADirectoryError as error:
+        logging.error("Cannot remove %s:%s", output_file, error)
 
 def format_size(num, suffix='B'):
+    """
+    format num bytes to a readable human format
+    """
     for unit in ['','K','M','G','T','P','E','Z']:
         if abs(num) < 1024.0:
             return "%3.1f%s%s" % (num, unit, suffix)
@@ -151,7 +222,9 @@ def format_size(num, suffix='B'):
     return "%.1f%s%s" % (num, 'Y', suffix)
 
 def format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved):
-
+    """
+    format input and output size and stats for logging
+    """
     input_fmt = format_size(input_file_size)
     output_fmt = format_size(output_file_size)
     saved_fmt = format_size(saved)
@@ -160,6 +233,9 @@ def format_input_output(input_file_size, output_file_size, saved, saved_percent,
     return "Input Size: %s Output Size: %s Saved: %s %2.2f percent Total %s" % (input_fmt, output_fmt, saved_fmt, saved_percent, total_saved_fmt)
 
 def print_summary():
+    """
+    print a summary of transcoder operations including infos, warnings and errors
+    """
     print("Summary:\n")
 
     print("\n".join(infos))
@@ -175,15 +251,21 @@ def print_summary():
         print("\n".join(errors))
         print("")
 
-def signal_handler(sig, frame):
-    logging.error("Interupted")
+def signal_handler(signal_number, _):
+    """
+    signal handler for the transcoder
+    """
+    logging.error("Interupted %d", signal_number)
 
     close_logging()
     print_summary()
-    
+
     sys.exit(1)
 
 def fetch_codec_name(path):
+    """
+    return codec name of a media file giving its path
+    """
     _, ext = os.path.splitext(path)
     if ext in skip_ext:
         return ""
@@ -191,19 +273,22 @@ def fetch_codec_name(path):
     check_output_cmd = probe_codec_cmd.copy()
     check_output_cmd += [path]
 
-    results = subprocess.run(check_output_cmd, stdout=subprocess.PIPE)
+    results = subprocess.run(check_output_cmd, stdout=subprocess.PIPE, check=False)
     if results.returncode != 0:
         log_error("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
         return ""
     codec = results.stdout.decode('utf-8').replace("\n","")
 
-    if codec == "" or codec not in video_codecs:
+    if codec == "" or codec not in VIDEO_CODECS:
         log_error("Invalid codec \"%s\" for %s" % (codec, path))
         return ""
 
     return codec
 
 def fetch_duration_in_frames(path):
+    """
+    fetch duration in frames (int) of a media file giving its path
+    """
     _, ext = os.path.splitext(path)
     if ext in skip_ext:
         return ""
@@ -211,7 +296,7 @@ def fetch_duration_in_frames(path):
     check_output_cmd = probe_duration_cmd.copy()
     check_output_cmd += [path]
 
-    results = subprocess.run(check_output_cmd, stdout=subprocess.PIPE)
+    results = subprocess.run(check_output_cmd, stdout=subprocess.PIPE, check=False)
     if results.returncode != 0:
         log_error("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
         return 0
@@ -220,7 +305,7 @@ def fetch_duration_in_frames(path):
     frame_duration = 0.0
     try:
         frame_duration = float(duration)
-    except:
+    except ValueError:
         pass
 
     if int(frame_duration) == 0:
@@ -228,9 +313,10 @@ def fetch_duration_in_frames(path):
 
     return int(frame_duration)
 
-def compare_input_output(input_file, output_file, input_codec_name, duration_diff_tolerance_in_frames, percent_tolerance):
-    global errors
-    global total_saved
+def compare_input_output(input_file, output_file, input_codec_name, transcode_args):
+    """
+    compare an input media file to its output media file and returns a tuple of comparison stats
+    """
 
     input_duration = fetch_duration_in_frames(input_file)
     output_duration = fetch_duration_in_frames(output_file)
@@ -239,32 +325,54 @@ def compare_input_output(input_file, output_file, input_codec_name, duration_dif
     output_name = os.path.basename(output_file)
 
     duration_diff = abs(input_duration - output_duration)
-    if duration_diff > duration_diff_tolerance_in_frames:
+    if duration_diff > transcode_args.get_diff_tolerance_in_frames():
         delta_in_frames = output_duration - input_duration
         log_error("Duration differs input: %s:%d frames output %s:%d frames out duration - in duration:%d frames" % (input_name, input_duration, output_name, output_duration, delta_in_frames))
 
     input_file_size = os.path.getsize(input_file)
     output_file_size= os.path.getsize(output_file)
     saved = input_file_size - output_file_size
-    saved_percent = (1. - float(output_file_size) / float(input_file_size)) * 100. 
-    total_saved += saved
+    saved_percent = (1. - float(output_file_size) / float(input_file_size)) * 100.
+    stats.increment_total_saved(saved)
 
-    if saved_percent > percent_tolerance:
+    if saved_percent > transcode_args.get_percent_tolerance():
         log_warning("File size percent difference is too high: %2.2f for file %s  Input codec %s" % (saved_percent, os.path.basename(output_file), input_codec_name))
 
-    return (input_file_size, output_file_size, saved, saved_percent, total_saved)
+    return (input_file_size, output_file_size, saved, saved_percent, stats.get_total_saved())
 
-def transcode(input_dir, output_dir, output_suffix, encoder_args, duration_diff_tolerance_in_frames, percent_tolerance, copy_others):
-    global total_saved
+def transcode_file(source_filename, codec_name, transcode_args, output_file):
+    """
+    transcode a single media file
+    """
+
+    cmd = "ffmpeg -i \"%s\" %s \"%s\"" % (source_filename, transcode_args.get_encoder_args(), output_file)
+    log_info("Running: %s" % (cmd))
+    outcome = run_cmd(cmd)
+    if outcome is False:
+
+        log_error("Error running %s" % (cmd))
+        remove_file(output_file)
+
+        return
+
+    input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename, output_file, codec_name, transcode_args)
+
+    log_info("Job Done: %s %s" % (output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)))
+
+
+def transcode(input_dir, output_dir, output_suffix, transcode_args, copy_others):
+    """
+    walk into a directory and transcode all media file to specified parameters
+    """
 
     for root, _, files in os.walk(input_dir, topdown=False):
         for name in files:
             source_filename = os.path.join(root,name).replace("./","")
 
             codec_name = fetch_codec_name(source_filename)
-            if codec_name == "" or codec_name == output_video_codec:
-                
-                logging.debug("Skipping %s codec \"%s\"" % (name, codec_name))
+            if codec_name in OUTPUT_VIDEO_CODEC:
+
+                logging.debug("Skipping %s codec \"%s\"", name, codec_name)
 
                 if copy_others is True:
                     dest_filename = os.path.join(output_dir, os.path.basename(source_filename))
@@ -275,7 +383,7 @@ def transcode(input_dir, output_dir, output_suffix, encoder_args, duration_diff_
                 continue
 
             output_filename, ext = os.path.splitext(source_filename)
-            output_filename += output_suffix + default_container_by_codec.get(output_video_codec)
+            output_filename += output_suffix + default_container_by_codec.get(OUTPUT_VIDEO_CODEC)
 
             if ext.lower() in skip_ext:
                 continue
@@ -284,25 +392,15 @@ def transcode(input_dir, output_dir, output_suffix, encoder_args, duration_diff_
 
             if os.path.exists(output_file) is True:
 
-                input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename,output_file, codec_name, duration_diff_tolerance_in_frames, percent_tolerance)
+                input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename,output_file, codec_name, transcode_args)
 
-                logging.debug("Skipping %s exists. %s" % (output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)))
-
-                continue
-
-            cmd = "ffmpeg -i \"%s\" %s \"%s\"" % (source_filename, encoder_args, output_file)
-            log_info("Running: %s" % (cmd))
-            outcome = run_cmd(cmd)
-            if outcome is False:
-
-                log_error("Error running %s" % (cmd))
-                remove_file(output_file)
+                logging.debug("Skipping %s exists. %s", output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved))
 
                 continue
 
-            input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename, output_file, codec_name, duration_diff_tolerance_in_frames, percent_tolerance)
+            transcode_file(source_filename, codec_name, transcode_args, output_file)
 
-            log_info("Job Done: %s %s" % (output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)))
+
 
 parser = argparse.ArgumentParser(description="tabarnak.py: transcode utility script")
 parser.add_argument("--input-dir", type=str, default=".", dest="input_dir", help="directory where your media files are found")
@@ -329,41 +427,42 @@ parser.add_argument("--vp9", action="store_const", const="vp9", dest="video_code
 
 
 args = parser.parse_args()
+stats = Stats()
 
-setup_logging(args)
+setup_logging()
 
 # setup signal interupt handler
 signal.signal(signal.SIGINT, signal_handler)
 
-encoder_args = ""
+ENCODER_ARGS = ""
 
 if args.map_args is not None:
-    encoder_args += args.map_args
+    ENCODER_ARGS += args.map_args
 elif args.default_map is False:
-    encoder_args += " -map 0 "
+    ENCODER_ARGS += " -map 0 "
 
 if args.strip_metadata is True:
-    encoder_args += " -map_metadata -1 "
+    ENCODER_ARGS += " -map_metadata -1 "
 
 if args.video_codec_name is not None:
-    encoder_args += default_video_encoder_args_by_codec.get(args.video_codec_name)
-    output_video_codec = args.video_codec_name
+    ENCODER_ARGS += default_video_encoder_args_by_codec.get(args.video_codec_name)
+    OUTPUT_VIDEO_CODEC = args.video_codec_name
 elif args.encoder_args is not None:
-    encoder_args += args.encoder_args
+    ENCODER_ARGS += args.encoder_args
 else:
-    encoder_args += default_video_encoder_args_by_codec.get(output_video_codec)
+    ENCODER_ARGS += default_video_encoder_args_by_codec.get(OUTPUT_VIDEO_CODEC)
 
 if args.output_dir is not None:
     os.makedirs(args.output_dir, exist_ok=True)
 
-transcode(args.input_dir, args.output_dir, args.output_suffix, encoder_args, args.duration_diff_tolerance_in_frames, args.percent_tolerance, args.copy_others)
+transcoder_args = TranscoderArgs(ENCODER_ARGS,
+                                 args.duration_diff_tolerance_in_frames,
+                                 args.percent_tolerance)
+
+transcode(args.input_dir, args.output_dir, args.output_suffix, transcoder_args, args.copy_others)
 
 print_summary()
 
 logging.info("Finished")
 
 close_logging()
-
-
-
-
