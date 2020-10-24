@@ -309,7 +309,7 @@ parser.add_argument("--output-suffix", type=str, default="", dest="output_suffix
 # logging
 parser.add_argument("--log-path", type=str, default="tabarnak.log", dest="log_path", help="log path")
 parser.add_argument("--prometheus-log-path", type=str, default="tabarnak.prom", dest="prometheus_log_path", help="prometheus log path")
-parser.add_argument("--use-prometheus-logging", default=True, action="store_true", dest="use_prometheus", help="use prometheus for logging")
+parser.add_argument("--use-prometheus-logging", default=False, action="store_true", dest="use_prometheus", help="use prometheus for logging")
 
 
 
