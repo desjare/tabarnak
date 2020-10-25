@@ -52,11 +52,14 @@ class TranscoderArgs:
     """
     transcoder arguments and options
     """
-    def __init__(self, encoder_args, output_video_codec, duration_diff_tolerance, percent_tolerance):
+    def __init__(self, encoder_args, output_video_codec, duration_diff_tolerance, percent_tolerance, stdout=sys.stdout, stderr=sys.stderr):
         self.encoder_args = encoder_args
         self.output_video_codec = output_video_codec
         self.duration_diff_tolerance_in_frames = duration_diff_tolerance
         self.percent_tolerance = percent_tolerance
+
+        self.stdout = stdout
+        self.stderr = stderr
 
     def get_encoder_args(self):
         """
@@ -149,18 +152,19 @@ def setup_logging(args):
     # create file handler which logs even debug message
     file_handler = logging.FileHandler(args.log_path)
     file_handler.setLevel(logging.DEBUG)
-
-    # create console handler with a higher log level
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-
     # set formatter
     file_handler.setFormatter(formatter)
-    console_handler.setFormatter(formatter)
-
     # add handlers
-    logger.addHandler(console_handler)
-    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    # create console handler with a higher log level
+    if args.stdout_path is None and args.stderr_path is None:
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        # set formatter
+        console_handler.setFormatter(formatter)
+        # set formatter
+        logger.addHandler(console_handler)
 
 def close_logging(args):
     """
@@ -232,24 +236,30 @@ def format_input_output(input_file_size, output_file_size, saved, saved_percent,
 
     return "Input Size: %s Output Size: %s Saved: %s %2.2f percent Total %s" % (input_fmt, output_fmt, saved_fmt, saved_percent, total_saved_fmt)
 
-def print_summary():
+def print_summary(transcoder_args=None):
     """
     print a summary of transcoder operations including infos, warnings and errors
     """
-    print("Summary:\n")
 
-    print("\n".join(infos))
-    print("")
+    stdout = sys.stdout
+    if transcoder_args:
+        stdout = transcoder_args.stdout
+    
+
+    print("\nSummary:\n", file=stdout)
+
+    print("\n".join(infos), file=stdout)
+    print("", file=stdout)
 
     if len(warnings) > 0:
-        print("Warnings:")
-        print("\n".join(warnings))
-        print("")
+        print("Warnings:", file=stdout)
+        print("\n".join(warnings), file=stdout)
+        print("", file=stdout)
 
     if len(errors) > 0:
-        print("Errors:")
-        print("\n".join(errors))
-        print("")
+        print("Errors:", file=stdout)
+        print("\n".join(errors), file=stdout)
+        print("", file=stdout)
 
 def signal_handler(signal_number, _):
     """
@@ -343,11 +353,14 @@ def transcode_file(source_filename, codec_name, transcode_args, stats, output_fi
     """
     transcode a single media file
     """
+    encoder_args =  transcode_args.get_encoder_args().strip().split(" ")
+    encoder_args = list(filter(lambda a: a != '', encoder_args))
 
-    cmd = "ffmpeg -i \"%s\" %s \"%s\"" % (source_filename, transcode_args.get_encoder_args(), output_file)
+    cmd = ["ffmpeg", "-i", source_filename] + encoder_args + [output_file]
     log_info("Running: %s" % (cmd))
-    outcome = run_cmd(cmd)
-    if outcome is False:
+
+    results = subprocess.run(cmd, stdout=transcode_args.stdout, stderr=transcode_args.stderr, check=False)
+    if results.returncode != 0:
 
         log_error("Error running %s" % (cmd))
         remove_file(output_file)
@@ -408,6 +421,8 @@ def parse_args(argv):
     parser.add_argument("--input-dir", type=str, default=".", dest="input_dir", help="directory where your media files are found")
     parser.add_argument("--output-dir", type=str, default=".", dest="output_dir", help="directory where your media files are outputted")
     parser.add_argument("--output-suffix", type=str, default="", dest="output_suffix", help="suffix to add to the output file")
+    parser.add_argument("--stdout-path", type=str, default=None, dest="stdout_path", help="redirect stdout to path")
+    parser.add_argument("--stderr-path", type=str, default=None, dest="stderr_path", help="redirect stderr to path")
 
     # logging
     parser.add_argument("--log-path", type=str, default="tabarnak.log", dest="log_path", help="log path")
@@ -478,14 +493,25 @@ def main(argv=None):
     if args.output_dir is not None:
         os.makedirs(args.output_dir, exist_ok=True)
 
-    transcoder_args = TranscoderArgs(encoder_args,
-                                    output_video_codec,
-                                    args.duration_diff_tolerance_in_frames,
-                                    args.percent_tolerance)
+    if args.stdout_path is not None and args.stderr_path is not None:
+        with open(args.stdout_path, "w+") as cmd_stdout, open(args.stderr_path, "w+") as cmd_stderr:
+            transcoder_args = TranscoderArgs(encoder_args,
+                                            output_video_codec,
+                                            args.duration_diff_tolerance_in_frames,
+                                            args.percent_tolerance,
+                                            stdout = cmd_stdout,
+                                            stderr = cmd_stderr)
+            transcode(args.input_dir, args.output_dir, args.output_suffix, transcoder_args, stats, args.copy_others)
 
-    transcode(args.input_dir, args.output_dir, args.output_suffix, transcoder_args, stats, args.copy_others)
+            print_summary(transcoder_args)
+    else:
+        transcoder_args = TranscoderArgs(encoder_args,
+                                            output_video_codec,
+                                            args.duration_diff_tolerance_in_frames,
+                                            args.percent_tolerance)
+        transcode(args.input_dir, args.output_dir, args.output_suffix, transcoder_args, stats, args.copy_others)
 
-    print_summary()
+        print_summary(transcoder_args)
 
     logging.info("Finished")
 

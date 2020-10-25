@@ -2,7 +2,6 @@
 Basic Acceptance Test Module
 """
 import os
-import subprocess
 import unittest
 
 from tabarnak_test_case import TabarnakTestCase
@@ -18,13 +17,10 @@ class TestBAT(TabarnakTestCase):
         """
         Basic encoding test using BAT directory as source
         """
+        input_dir = os.path.join(test_dir, "BAT", "H264")
 
-        with open(self.stdout_path, "w+") as cmd_stdout, open(self.stderr_path, "w+") as cmd_stderr:
-
-            input_dir = os.path.join(test_dir, "BAT", "H264")
-
-            cmd = self.tabarnak_cmd + ["--input-dir", input_dir] + self.tarbarnak_log_args
-            self.run_tabarnak(cmd)
+        cmd = self.tabarnak_cmd + ["--input-dir", input_dir]
+        self.run_tabarnak(cmd)
 
         self.assert_codec_name(self.output_dir, "hevc")
 
@@ -32,17 +28,14 @@ class TestBAT(TabarnakTestCase):
         """
         Basic encoding failure using invalid argument
         """
+        input_dir = os.path.join(test_dir, "BAT", "H264")
+        args = ["--input-dir", input_dir, "--invalid-args"]
+        cmd = self.tabarnak_cmd + args
 
-        with open(self.stdout_path, "w+") as cmd_stdout, open(self.stderr_path, "w+") as cmd_stderr:
-
-            input_dir = os.path.join(test_dir, "BAT", "H264")
-            args = ["--input-dir", input_dir, "--invalid-args"]
-            cmd = self.tabarnak_cmd + args + self.tarbarnak_log_args
-
-            try:
-                self.run_tabarnak(cmd)
-            except ChildProcessError:
-                pass
+        try:
+            self.run_tabarnak(cmd)
+        except ChildProcessError:
+            pass
 
 
 if __name__ == '__main__':

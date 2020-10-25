@@ -48,8 +48,12 @@ class TabarnakTestCase(unittest.TestCase):
         self.stdout_path = os.path.join(self.output_dir, self.id()+"-stdout.txt")
         self.stderr_path = os.path.join(self.output_dir, self.id()+"-stderr.txt")
 
-        self.tabarnak_cmd = ["--output-dir", self.output_dir]
         self.tarbarnak_log_args = ["--log-path", self.test_log_path]
+
+        self.tabarnak_cmd = ["--output-dir", self.output_dir]
+        self.tabarnak_cmd += ["--stdout-path", self.stdout_path]
+        self.tabarnak_cmd += ["--stderr-path", self.stderr_path]
+        self.tabarnak_cmd += self.tarbarnak_log_args
 
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -88,6 +92,9 @@ class TabarnakTestCase(unittest.TestCase):
         self.stderr_path = None
 
     def run_tabarnak(self, cmd):
+        """
+        run tarbarnak main utility method
+        """
         argv_copy = sys.argv.copy()
 
         try:
