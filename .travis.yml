@@ -15,8 +15,8 @@ python:
 
 # command to install dependencies
 install:
-    - pip install --user codecov coverage
-    - pip install --user prometheus-client
+    - pip install codecov coverage
+    - pip install prometheus-client
 
 # command to run tests
 script:

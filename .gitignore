@@ -1,6 +1,8 @@
 output
 test_output*
 test_*.txt
+.coverage
+coverage.xml
 *.pyc
 *.log
 *.prom
