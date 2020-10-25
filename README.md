@@ -2,7 +2,7 @@
 
 ![Build Status](https://travis-ci.com/desjare/tabarnak.svg?branch=main)
 [![codecov](https://codecov.io/gh/desjare/tabarnak/branch/main/graph/badge.svg?token=OTM2MYLPOM)](undefined)
-
+[![HitCount](http://hits.dwyl.com/desjare/desjare/tabarnak.svg)](http://hits.dwyl.com/desjare/desjare/tabarnak)
 
 
 # Description
