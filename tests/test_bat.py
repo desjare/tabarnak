@@ -2,6 +2,7 @@
 Basic Acceptance Test Module
 """
 import os
+import shutil
 import unittest
 
 from tabarnak_test_case import TabarnakTestCase
@@ -34,6 +35,8 @@ class TestBAT(TabarnakTestCase):
         cmd = self.tabarnak_basic_cmd + ["--input-dir", input_dir]
         cmd += ["--strip-metadata", "--map-args", "-map 0"]
         cmd += ["--encoder-args", "-c:v libx265 -crf 20"]
+        cmd += ["--duration-tolerance", 0]
+        cmd += ["--percent-tolerance", 0]
         self.run_tabarnak(cmd)
 
         self.assert_codec_name(self.output_dir, "hevc")
@@ -76,6 +79,20 @@ class TestBAT(TabarnakTestCase):
         # no files should be outputted
         self.assert_codec_name(self.output_dir, "h264", 0)
 
+    def test_transcode_same_codec_skip_existing(self):
+        """
+        Basic encoding test using BAT directory as source existing file in output directory
+        """
+        input_dir = os.path.join(test_dir, "BAT", "H264")
+
+        input_file = "H.264-720x480-1-audio-tracks-mono-vorbis-eng-2-seconds.mkv"
+        input_file_path = os.path.join(test_dir, "BAT", "H264", input_file)
+        output_file_path = os.path.join(self.output_dir, input_file)
+
+        shutil.copyfile(input_file_path, output_file_path)
+
+        cmd = self.tabarnak_cmd + ["--input-dir", input_dir]
+        self.run_tabarnak(cmd)
 
     def test_enable_prometheus_logging(self):
         """

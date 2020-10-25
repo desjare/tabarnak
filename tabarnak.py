@@ -266,10 +266,6 @@ def fetch_codec_name(path):
     """
     return codec name of a media file giving its path
     """
-    _, ext = os.path.splitext(path)
-    if ext in skip_ext:
-        return ""
-
     check_output_cmd = probe_codec_cmd.copy()
     check_output_cmd += [path]
 
@@ -289,10 +285,6 @@ def fetch_duration_in_frames(path):
     """
     fetch duration in frames (int) of a media file giving its path
     """
-    _, ext = os.path.splitext(path)
-    if ext in skip_ext:
-        return ""
-
     check_output_cmd = probe_duration_cmd.copy()
     check_output_cmd += [path]
 
