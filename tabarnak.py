@@ -14,8 +14,8 @@ import sys
 import subprocess
 import shutil
 
-if sys.version_info < (3,8):
-    raise Exception("Must be using Python 3.8")
+if sys.version_info < (3,6):
+    raise Exception("Must be using Python 3.6")
 
 # ffprobe
 ffprobe_path = shutil.which("ffprobe")
