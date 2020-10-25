@@ -127,9 +127,6 @@ class TabarnakTestCase(unittest.TestCase):
         if count is not None:
             self.assertEqual(media_files, count)
 
-                
-
-
     def list_to_reason(self, exc_list):
         """
         extract a reason from a test result errors or failures list

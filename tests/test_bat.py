@@ -19,7 +19,7 @@ class TestBAT(TabarnakTestCase):
         """
         input_dir = os.path.join(test_dir, "BAT", "H264")
 
-        cmd = self.tabarnak_cmd + ["--input-dir", input_dir]
+        cmd = self.tabarnak_cmd + ["--input-dir", input_dir, "--copy"]
         self.run_tabarnak(cmd)
 
         self.assert_codec_name(self.output_dir, "hevc")
