@@ -1,4 +1,4 @@
-**tabarnak** - **T**ranscoder **A**ll **B**asically **A**ccessible **R**esolutely **N**ot **A**ll **K**lingon transcode [ffmpeg](https://ffmpeg.org/) based utility tool
+**tabarnak** - **T**ranscoder **A**ll **B**asically **A**ccessible **R**esolutely **N**ot **A**ll **K**lingon - transcode [ffmpeg](https://ffmpeg.org/) based utility tool
 
 # Description
 This script is used to convert video or video/audio media files to modern codecs such as HEVC, VP9 or AV1 (experimental). It walks into a directory and probes media files for video that are not encoded with specified codec (default HEVC). Then it transcodes them. The idea is to use a more modern codec that has a better quality/bitrate ratio. Resulting files are significantly smaller than original h264, mpeg2, mpeg4 or likely any other formats that they are currently encoded to.
