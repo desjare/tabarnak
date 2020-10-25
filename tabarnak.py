@@ -195,16 +195,6 @@ def log_error(error):
     errors.append(error)
     logging.error(error)
 
-def run_cmd(cmd):
-    """
-    run a command using os.system. return True if status is 0 False otherwise
-    """
-    status = os.system(cmd)
-    if status != 0:
-        logging.error("running cmd: %s failed status %d", cmd, status)
-        return False
-    return True
-
 def remove_file(output_file):
     """
     remove a file and ignore exception
@@ -244,7 +234,6 @@ def print_summary(transcoder_args=None):
     stdout = sys.stdout
     if transcoder_args:
         stdout = transcoder_args.stdout
-    
 
     print("\nSummary:\n", file=stdout)
 
