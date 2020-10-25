@@ -1,6 +1,8 @@
 **tabarnak** - **T**ranscoder **A**ll **B**asically **A**ccessible **R**esolutely **N**ot **A**ll **K**lingon - transcode [ffmpeg](https://ffmpeg.org/) based utility tool
 
 ![Build Status](https://travis-ci.com/desjare/tabarnak.svg?branch=main)
+[![codecov](https://codecov.io/gh/desjare/tabarnak/branch/main/graph/badge.svg?token=OTM2MYLPOM)](undefined)
+
 
 
 # Description
