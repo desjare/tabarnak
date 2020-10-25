@@ -28,7 +28,7 @@ class TestBAT(TabarnakTestCase):
 
         self.assert_codec_name(self.output_dir, "hevc")
 
-    def toto_test_basic_failure(self):
+    def test_basic_failure(self):
         """
         Basic encoding failure using invalid argument
         """
@@ -39,7 +39,10 @@ class TestBAT(TabarnakTestCase):
             args = ["--input-dir", input_dir, "--invalid-args"]
             cmd = self.tabarnak_cmd + args + self.tarbarnak_log_args
 
-            self.run_tabarnak(cmd)
+            try:
+                self.run_tabarnak(cmd)
+            except ChildProcessError:
+                pass
 
 
 if __name__ == '__main__':

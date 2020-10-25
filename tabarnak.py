@@ -425,6 +425,19 @@ def parse_args(argv):
     parser.add_argument("--av1", action="store_const", const="av1", dest="video_codec_name", help="specify av1 codec")
     parser.add_argument("--vp9", action="store_const", const="vp9", dest="video_codec_name", help="specify vp9 codec")
 
+    if argv is not None:
+        def error(message):
+            """
+            error(message: string)
+
+            Prints a usage message incorporating the message to stderr and
+            raise an raise an exception.
+            """
+            raise ChildProcessError(message)
+
+        # monkey patch parser when running unittests
+        parser.error = error
+
     arguments = parser.parse_args(argv)
 
     return arguments
