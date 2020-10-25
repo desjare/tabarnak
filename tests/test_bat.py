@@ -24,12 +24,38 @@ class TestBAT(TabarnakTestCase):
 
         self.assert_codec_name(self.output_dir, "hevc")
 
+    def test_basic_no_stdout_stderr_redirect(self):
+        """
+        Basic encoding test using BAT directory as source without redirecting outputs and errors
+        """
+        input_dir = os.path.join(test_dir, "BAT", "H264")
+
+        cmd = self.tabarnak_basic_cmd + ["--input-dir", input_dir]
+        cmd += ["--strip-metadata", "--map-args", "-map 0"]
+        cmd += ["--encoder-args", "-c:v libx265 -crf 20"]
+        self.run_tabarnak(cmd)
+
+        self.assert_codec_name(self.output_dir, "hevc")
+
     def test_basic_failure(self):
         """
         Basic encoding failure using invalid argument
         """
         input_dir = os.path.join(test_dir, "BAT", "H264")
         args = ["--input-dir", input_dir, "--invalid-args"]
+        cmd = self.tabarnak_cmd + args
+
+        try:
+            self.run_tabarnak(cmd)
+        except ChildProcessError:
+            pass
+
+    def test_basic_failure_invalid_input(self):
+        """
+        Basic encoding failure using invalid input
+        """
+        input_dir = os.path.join(test_dir, "BAT", "INVALID")
+        args = ["--input-dir", input_dir]
         cmd = self.tabarnak_cmd + args
 
         try:

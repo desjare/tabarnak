@@ -50,10 +50,12 @@ class TabarnakTestCase(unittest.TestCase):
 
         self.tarbarnak_log_args = ["--log-path", self.test_log_path]
 
-        self.tabarnak_cmd = ["--output-dir", self.output_dir]
+        self.tabarnak_basic_cmd = ["--output-dir", self.output_dir]
+        self.tabarnak_basic_cmd += self.tarbarnak_log_args
+        self.tabarnak_cmd = self.tabarnak_basic_cmd.copy()
         self.tabarnak_cmd += ["--stdout-path", self.stdout_path]
         self.tabarnak_cmd += ["--stderr-path", self.stderr_path]
-        self.tabarnak_cmd += self.tarbarnak_log_args
+
 
         os.makedirs(self.output_dir, exist_ok=True)
 
