@@ -27,7 +27,6 @@ probe_codec_cmd = probe_cmd + probe_vstream + ["-show_entries", "stream=codec_na
 probe_duration_cmd = probe_cmd + ["-show_entries", "format=duration"] + probe_of
 
 # codec & configurations
-OUTPUT_VIDEO_CODEC = "hevc"
 VIDEO_CODECS = ["hevc", "h264", "dvvideo", "mpeg4", "msmpeg4v3", "dnxhd"]
 
 default_container_by_codec = {
@@ -53,8 +52,9 @@ class TranscoderArgs:
     """
     transcoder arguments and options
     """
-    def __init__(self, encoder_args, duration_diff_tolerance, percent_tolerance):
+    def __init__(self, encoder_args, output_video_codec, duration_diff_tolerance, percent_tolerance):
         self.encoder_args = encoder_args
+        self.output_video_codec = output_video_codec
         self.duration_diff_tolerance_in_frames = duration_diff_tolerance
         self.percent_tolerance = percent_tolerance
 
@@ -97,7 +97,7 @@ class Stats:
         return self.total_saved
 
 
-def setup_logging():
+def setup_logging(args):
     """
     setup logging. Add file & console logging handlers.
     If we are using prometheus setup prometheus logging.
@@ -162,7 +162,7 @@ def setup_logging():
     logger.addHandler(console_handler)
     logger.addHandler(console_handler)
 
-def close_logging():
+def close_logging(args):
     """
     close logging. If prometheus is enabaled, dump the REGISTRY to file
     """
@@ -257,7 +257,6 @@ def signal_handler(signal_number, _):
     """
     logging.error("Interupted %d", signal_number)
 
-    close_logging()
     print_summary()
 
     sys.exit(1)
@@ -313,7 +312,7 @@ def fetch_duration_in_frames(path):
 
     return int(frame_duration)
 
-def compare_input_output(input_file, output_file, input_codec_name, transcode_args):
+def compare_input_output(input_file, output_file, input_codec_name, transcode_args, stats):
     """
     compare an input media file to its output media file and returns a tuple of comparison stats
     """
@@ -340,7 +339,7 @@ def compare_input_output(input_file, output_file, input_codec_name, transcode_ar
 
     return (input_file_size, output_file_size, saved, saved_percent, stats.get_total_saved())
 
-def transcode_file(source_filename, codec_name, transcode_args, output_file):
+def transcode_file(source_filename, codec_name, transcode_args, stats, output_file):
     """
     transcode a single media file
     """
@@ -355,12 +354,12 @@ def transcode_file(source_filename, codec_name, transcode_args, output_file):
 
         return
 
-    input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename, output_file, codec_name, transcode_args)
+    input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename, output_file, codec_name, transcode_args, stats)
 
     log_info("Job Done: %s %s" % (output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)))
 
 
-def transcode(input_dir, output_dir, output_suffix, transcode_args, copy_others):
+def transcode(input_dir, output_dir, output_suffix, transcode_args, stats, copy_others):
     """
     walk into a directory and transcode all media file to specified parameters
     """
@@ -370,7 +369,7 @@ def transcode(input_dir, output_dir, output_suffix, transcode_args, copy_others)
             source_filename = os.path.join(root,name).replace("./","")
 
             codec_name = fetch_codec_name(source_filename)
-            if codec_name in OUTPUT_VIDEO_CODEC:
+            if codec_name in transcode_args.output_video_codec:
 
                 logging.debug("Skipping %s codec \"%s\"", name, codec_name)
 
@@ -383,7 +382,7 @@ def transcode(input_dir, output_dir, output_suffix, transcode_args, copy_others)
                 continue
 
             output_filename, ext = os.path.splitext(source_filename)
-            output_filename += output_suffix + default_container_by_codec.get(OUTPUT_VIDEO_CODEC)
+            output_filename += output_suffix + default_container_by_codec.get(transcode_args.output_video_codec)
 
             if ext.lower() in skip_ext:
                 continue
@@ -392,77 +391,92 @@ def transcode(input_dir, output_dir, output_suffix, transcode_args, copy_others)
 
             if os.path.exists(output_file) is True:
 
-                input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename,output_file, codec_name, transcode_args)
+                input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename,output_file, codec_name, transcode_args, stats)
 
                 logging.debug("Skipping %s exists. %s", output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved))
 
                 continue
 
-            transcode_file(source_filename, codec_name, transcode_args, output_file)
+            transcode_file(source_filename, codec_name, transcode_args, stats, output_file)
 
 
+def parse_args(argv):
+    """
+    parse program arguments
+    """
+    parser = argparse.ArgumentParser(description="tabarnak.py: transcode utility script")
+    parser.add_argument("--input-dir", type=str, default=".", dest="input_dir", help="directory where your media files are found")
+    parser.add_argument("--output-dir", type=str, default=".", dest="output_dir", help="directory where your media files are outputted")
+    parser.add_argument("--output-suffix", type=str, default="", dest="output_suffix", help="suffix to add to the output file")
 
-parser = argparse.ArgumentParser(description="tabarnak.py: transcode utility script")
-parser.add_argument("--input-dir", type=str, default=".", dest="input_dir", help="directory where your media files are found")
-parser.add_argument("--output-dir", type=str, default=".", dest="output_dir", help="directory where your media files are outputted")
-parser.add_argument("--output-suffix", type=str, default="", dest="output_suffix", help="suffix to add to the output file")
+    # logging
+    parser.add_argument("--log-path", type=str, default="tabarnak.log", dest="log_path", help="log path")
+    parser.add_argument("--prometheus-log-path", type=str, default="tabarnak.prom", dest="prometheus_log_path", help="prometheus log path")
+    parser.add_argument("--use-prometheus-logging", default=False, action="store_true", dest="use_prometheus", help="use prometheus for logging")
 
-# logging
-parser.add_argument("--log-path", type=str, default="tabarnak.log", dest="log_path", help="log path")
-parser.add_argument("--prometheus-log-path", type=str, default="tabarnak.prom", dest="prometheus_log_path", help="prometheus log path")
-parser.add_argument("--use-prometheus-logging", default=False, action="store_true", dest="use_prometheus", help="use prometheus for logging")
+    parser.add_argument("--copy", default=False, dest="copy_others", action="store_true", help="copy hevc source files and other files")
+    parser.add_argument("--default-map", default=False, action="store_true", dest="default_map", help="use ffmpeg default mapping instead of mapping all streams which might not be supported by mkv container")
+    parser.add_argument("--map-args", type=str, default=None, dest="map_args", help="specify ffmpeg map arguments")
+    parser.add_argument("--strip-metadata", default=False, action="store_true", dest="strip_metadata", help="remove most metadata from the file")
+    parser.add_argument("--duration-tolerance", type=int, default=30, dest="duration_diff_tolerance_in_frames", help="duration difference in frames that is tolerated")
+    parser.add_argument("--percent-tolerance", type=int, default=95, dest="percent_tolerance", help="percent difference that is tolerated")
+    parser.add_argument("--encoder-args", type=str, default=None, dest="encoder_args", help="override default encoder args")
+    parser.add_argument("--hevc", action="store_const", const="hevc", dest="video_codec_name", help="specify hevc codec")
+    parser.add_argument("--av1", action="store_const", const="av1", dest="video_codec_name", help="specify av1 codec")
+    parser.add_argument("--vp9", action="store_const", const="vp9", dest="video_codec_name", help="specify vp9 codec")
 
+    arguments = parser.parse_args(argv)
 
+    return arguments
 
-parser.add_argument("--copy", default=False, dest="copy_others", action="store_true", help="copy hevc source files and other files")
-parser.add_argument("--default-map", default=False, action="store_true", dest="default_map", help="use ffmpeg default mapping instead of mapping all streams which might not be supported by mkv container")
-parser.add_argument("--map-args", type=str, default=None, dest="map_args", help="specify ffmpeg map arguments")
-parser.add_argument("--strip-metadata", default=False, action="store_true", dest="strip_metadata", help="remove most metadata from the file")
-parser.add_argument("--duration-tolerance", type=int, default=30, dest="duration_diff_tolerance_in_frames", help="duration difference in frames that is tolerated")
-parser.add_argument("--percent-tolerance", type=int, default=95, dest="percent_tolerance", help="percent difference that is tolerated")
-parser.add_argument("--encoder-args", type=str, default=None, dest="encoder_args", help="override default encoder args")
-parser.add_argument("--hevc", action="store_const", const="hevc", dest="video_codec_name", help="specify hevc codec")
-parser.add_argument("--av1", action="store_const", const="av1", dest="video_codec_name", help="specify av1 codec")
-parser.add_argument("--vp9", action="store_const", const="vp9", dest="video_codec_name", help="specify vp9 codec")
+def main(argv=None):
+    """
+    main function
+    """
 
+    args = parse_args(argv)
 
-args = parser.parse_args()
-stats = Stats()
+    stats = Stats()
 
-setup_logging()
+    setup_logging(args)
 
-# setup signal interupt handler
-signal.signal(signal.SIGINT, signal_handler)
+    # setup signal interupt handler
+    signal.signal(signal.SIGINT, signal_handler)
 
-ENCODER_ARGS = ""
+    encoder_args = ""
+    output_video_codec = "hevc"
 
-if args.map_args is not None:
-    ENCODER_ARGS += args.map_args
-elif args.default_map is False:
-    ENCODER_ARGS += " -map 0 "
+    if args.map_args is not None:
+        encoder_args += args.map_args
+    elif args.default_map is False:
+        encoder_args += " -map 0 "
 
-if args.strip_metadata is True:
-    ENCODER_ARGS += " -map_metadata -1 "
+    if args.strip_metadata is True:
+        encoder_args += " -map_metadata -1 "
 
-if args.video_codec_name is not None:
-    ENCODER_ARGS += default_video_encoder_args_by_codec.get(args.video_codec_name)
-    OUTPUT_VIDEO_CODEC = args.video_codec_name
-elif args.encoder_args is not None:
-    ENCODER_ARGS += args.encoder_args
-else:
-    ENCODER_ARGS += default_video_encoder_args_by_codec.get(OUTPUT_VIDEO_CODEC)
+    if args.video_codec_name is not None:
+        encoder_args += default_video_encoder_args_by_codec.get(args.video_codec_name)
+        output_video_codec = args.video_codec_name
+    elif args.encoder_args is not None:
+        encoder_args += args.encoder_args
+    else:
+        encoder_args += default_video_encoder_args_by_codec.get(output_video_codec)
 
-if args.output_dir is not None:
-    os.makedirs(args.output_dir, exist_ok=True)
+    if args.output_dir is not None:
+        os.makedirs(args.output_dir, exist_ok=True)
 
-transcoder_args = TranscoderArgs(ENCODER_ARGS,
-                                 args.duration_diff_tolerance_in_frames,
-                                 args.percent_tolerance)
+    transcoder_args = TranscoderArgs(encoder_args,
+                                    output_video_codec,
+                                    args.duration_diff_tolerance_in_frames,
+                                    args.percent_tolerance)
 
-transcode(args.input_dir, args.output_dir, args.output_suffix, transcoder_args, args.copy_others)
+    transcode(args.input_dir, args.output_dir, args.output_suffix, transcoder_args, stats, args.copy_others)
 
-print_summary()
+    print_summary()
 
-logging.info("Finished")
+    logging.info("Finished")
 
-close_logging()
+    close_logging(args)
+
+if __name__ == "__main__":
+    main()

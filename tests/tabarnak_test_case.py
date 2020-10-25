@@ -7,7 +7,10 @@ import os
 import time
 import shutil
 import subprocess
+import sys
 import unittest
+
+import tabarnak
 
 ffprobe_path = shutil.which("ffprobe")
 
@@ -45,7 +48,7 @@ class TabarnakTestCase(unittest.TestCase):
         self.stdout_path = os.path.join(self.output_dir, self.id()+"-stdout.txt")
         self.stderr_path = os.path.join(self.output_dir, self.id()+"-stderr.txt")
 
-        self.tabarnak_cmd = ["python3", tabarnak_path,"--output-dir", self.output_dir]
+        self.tabarnak_cmd = ["--output-dir", self.output_dir]
         self.tarbarnak_log_args = ["--log-path", self.test_log_path]
 
         os.makedirs(self.output_dir, exist_ok=True)
@@ -83,6 +86,15 @@ class TabarnakTestCase(unittest.TestCase):
         self.test_log_path = None
         self.stdout_path = None
         self.stderr_path = None
+
+    def run_tabarnak(self, cmd):
+        argv_copy = sys.argv.copy()
+
+        try:
+            tabarnak.main(cmd)
+
+        finally:
+            sys.argv = argv_copy
 
     def assert_codec_name(self, output_dir, codec_name):
         """
