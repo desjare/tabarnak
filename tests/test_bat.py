@@ -23,6 +23,7 @@ class TestBAT(TabarnakTestCase):
         self.run_tabarnak(cmd)
 
         self.assert_codec_name(self.output_dir, "hevc")
+        self.assert_copy(self.output_dir, 1)
 
     def test_basic_no_stdout_stderr_redirect(self):
         """

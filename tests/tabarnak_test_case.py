@@ -127,6 +127,25 @@ class TabarnakTestCase(unittest.TestCase):
         if count is not None:
             self.assertEqual(media_files, count)
 
+    def assert_copy(self, output_dir, count):
+        """
+        assert that all file in output_dir are of a certain codec
+        """
+        media_files = 0
+        non_media_files = 0
+
+        for _, _, files in os.walk(output_dir, topdown=False):
+            for name in files:
+                _, ext = os.path.splitext(name)
+                if ext in media_ext:
+                    media_files += 1
+                else:
+                    non_media_files += 1
+
+        if count is not None:
+            self.assertGreaterEqual(non_media_files, count)
+            self.assertGreaterEqual(media_files, count)
+
     def list_to_reason(self, exc_list):
         """
         extract a reason from a test result errors or failures list
