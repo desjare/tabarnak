@@ -1,3 +1,4 @@
+name: Test
 dist: focal
 addons:
     apt:
