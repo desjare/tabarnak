@@ -37,9 +37,22 @@ class TestBAT(TabarnakTestCase):
         except ChildProcessError:
             pass
 
+    def test_transcode_same_codec_skip(self):
+        """
+        Basic encoding test using BAT directory as source using h264
+        """
+        input_dir = os.path.join(test_dir, "BAT", "H264")
+
+        cmd = self.tabarnak_cmd + ["--input-dir", input_dir, "--h264"]
+        self.run_tabarnak(cmd)
+
+        # no files should be outputted
+        self.assert_codec_name(self.output_dir, "h264", 0)
+
+
     def test_enable_prometheus_logging(self):
         """
-        Basic encoding test using BAT directory as source
+        Basic encoding test using BAT directory as source and enable prometheus logging
         """
         input_dir = os.path.join(test_dir, "BAT", "H264")
         prometheus_log_path = os.path.join(self.output_dir, self.id() + ".prom")

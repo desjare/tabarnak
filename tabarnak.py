@@ -30,12 +30,14 @@ probe_duration_cmd = probe_cmd + ["-show_entries", "format=duration"] + probe_of
 VIDEO_CODECS = ["hevc", "h264", "dvvideo", "mpeg4", "msmpeg4v3", "dnxhd"]
 
 default_container_by_codec = {
+    "h264": ".mkv",
     "hevc" : ".mkv",
     "av1" : ".mkv",
     "vp9" : ".webm"
 }
 
 default_video_encoder_args_by_codec = {
+    "h264" : " -c:v libx264 -crf 30 ",
     "hevc" : " -c:v libx265 -crf 28 ",
     "av1" : " -c:v libaom-av1 -crf 30 -b:v 2000k -strict experimental -row-mt 1 -tile-columns 4 -tile-rows 4 -threads 12",
     "vp9" : " -c:v libvpx-vp9 -crf 30 -b:v 2000k "
@@ -425,6 +427,7 @@ def parse_args(argv):
     parser.add_argument("--duration-tolerance", type=int, default=30, dest="duration_diff_tolerance_in_frames", help="duration difference in frames that is tolerated")
     parser.add_argument("--percent-tolerance", type=int, default=95, dest="percent_tolerance", help="percent difference that is tolerated")
     parser.add_argument("--encoder-args", type=str, default=None, dest="encoder_args", help="override default encoder args")
+    parser.add_argument("--h264", action="store_const", const="h264", dest="video_codec_name", help="specify h264 codec")
     parser.add_argument("--hevc", action="store_const", const="hevc", dest="video_codec_name", help="specify hevc codec")
     parser.add_argument("--av1", action="store_const", const="av1", dest="video_codec_name", help="specify av1 codec")
     parser.add_argument("--vp9", action="store_const", const="vp9", dest="video_codec_name", help="specify vp9 codec")

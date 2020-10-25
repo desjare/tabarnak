@@ -103,10 +103,12 @@ class TabarnakTestCase(unittest.TestCase):
         finally:
             sys.argv = argv_copy
 
-    def assert_codec_name(self, output_dir, codec_name):
+    def assert_codec_name(self, output_dir, codec_name, count=None):
         """
         assert that all file in output_dir are of a certain codec
         """
+        media_files = 0
+
         for root, _, files in os.walk(output_dir, topdown=False):
             for name in files:
                 _, ext = os.path.splitext(name)
@@ -117,6 +119,13 @@ class TabarnakTestCase(unittest.TestCase):
 
                 self.assertEqual(self.fetch_codec_name(output_path), codec_name)
                 self.assertGreater(self.fetch_duration_in_frames(output_path), 0)
+
+                media_files += 1
+
+        if count is not None:
+            self.assertEqual(media_files, count)
+
+                
 
 
     def list_to_reason(self, exc_list):
