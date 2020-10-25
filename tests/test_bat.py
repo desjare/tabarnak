@@ -29,17 +29,12 @@ class TestBAT(TabarnakTestCase):
 
             results = subprocess.run(cmd, stdout=cmd_stdout, stderr=cmd_stderr, check=False)
 
-        output_file = "H.264-720x480-1-audio-tracks-mono-vorbis-eng-2-seconds.mkv"
-        output_path = os.path.join(self.output_dir, output_file)
         self.assertEqual(results.returncode, 0)
-        self.assertTrue(os.path.exists(output_path))
-        self.assertEqual(self.fetch_codec_name(output_path), "hevc")
-        self.assertEqual(self.fetch_duration_in_frames(output_path), 2)
-
+        self.assert_codec_name(self.output_dir, "hevc")
 
     def test_basic_failure(self):
         """
-        test basic failure: invalid argument
+        Basic encoding failure using invalid argument
         """
 
         with open(self.stdout_path, "w+") as cmd_stdout, open(self.stderr_path, "w+") as cmd_stderr:

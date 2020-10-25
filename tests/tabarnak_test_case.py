@@ -17,6 +17,7 @@ probe_vstream = ["-select_streams",  "v:0"]
 probe_codec_cmd = probe_cmd + probe_vstream + ["-show_entries", "stream=codec_name"] + probe_of
 probe_duration_cmd = probe_cmd + ["-show_entries", "format=duration"] + probe_of
 
+media_ext = [".mkv", ".mp4", ".webm"]
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -82,6 +83,22 @@ class TabarnakTestCase(unittest.TestCase):
         self.test_log_path = None
         self.stdout_path = None
         self.stderr_path = None
+
+    def assert_codec_name(self, output_dir, codec_name):
+        """
+        assert that all file in output_dir are of a certain codec
+        """
+        for root, _, files in os.walk(output_dir, topdown=False):
+            for name in files:
+                _, ext = os.path.splitext(name)
+                if not ext in media_ext:
+                    continue
+
+                output_path = os.path.join(root, name)
+
+                self.assertEqual(self.fetch_codec_name(output_path), codec_name)
+                self.assertGreater(self.fetch_duration_in_frames(output_path), 0)
+
 
     def list_to_reason(self, exc_list):
         """
