@@ -1,1 +1,18 @@
+dist: focal
+addons:
+	apt:
+		packages:
+			- ffmpeg
+			- git
+			- git-lfs
+
 language: python
+
+# command to install dependencies
+install:
+	- pip install prometheus-client
+
+# command to run tests
+script:
+	- tests/runtest.sh
+
