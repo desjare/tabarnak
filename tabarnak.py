@@ -5,6 +5,7 @@ tabarnak - transcode all basically accessible resolutely not all Klingon transco
 # pylint: disable=line-too-long
 # pylint: disable=import-outside-toplevel
 # pylint: disable=too-many-locals
+# pylint: disable=too-many-instance-attributes
 
 import argparse
 import logging
@@ -54,11 +55,31 @@ class TranscoderArgs:
     """
     transcoder arguments and options
     """
-    def __init__(self, encoder_args, output_video_codec, duration_diff_tolerance, percent_tolerance, stdout=sys.stdout, stderr=sys.stderr):
-        self.encoder_args = encoder_args
-        self.output_video_codec = output_video_codec
-        self.duration_diff_tolerance_in_frames = duration_diff_tolerance
-        self.percent_tolerance = percent_tolerance
+    def __init__(self, args, stdout=sys.stdout, stderr=sys.stderr):
+        self.args = args
+
+        self.input_dir = args.input_dir
+        self.output_dir = args.output_dir
+        self.output_suffix = args.output_suffix
+
+        self.encoder_args = ""
+        self.output_video_codec = "hevc"
+
+        if args.map_args is not None:
+            self.encoder_args += args.map_args
+        elif args.default_map is False:
+            self.encoder_args += " -map 0 "
+
+        if args.strip_metadata is True:
+            self.encoder_args += " -map_metadata -1 "
+
+        if args.video_codec_name is not None:
+            self.encoder_args += default_video_encoder_args_by_codec.get(args.video_codec_name)
+            self.output_video_codec = args.video_codec_name
+        elif args.encoder_args is not None:
+            self.encoder_args += args.encoder_args
+        else:
+            self.encoder_args += default_video_encoder_args_by_codec.get(self.output_video_codec)
 
         self.stdout = stdout
         self.stderr = stderr
@@ -73,13 +94,13 @@ class TranscoderArgs:
         """
         fetch diff tolerance in frames
         """
-        return self.duration_diff_tolerance_in_frames
+        return self.args.duration_diff_tolerance_in_frames
 
     def get_percent_tolerance(self):
         """
         fetch percent tolerance
         """
-        return self.percent_tolerance
+        return self.args.percent_tolerance
 
 class Stats:
     """
@@ -355,12 +376,12 @@ def transcode_file(source_filename, codec_name, transcode_args, stats, output_fi
     log_info("Job Done: %s %s" % (output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)))
 
 
-def transcode(input_dir, output_dir, output_suffix, transcode_args, stats, copy_others):
+def transcode(transcode_args, stats, copy_others):
     """
     walk into a directory and transcode all media file to specified parameters
     """
 
-    for root, _, files in os.walk(input_dir, topdown=False):
+    for root, _, files in os.walk(transcode_args.input_dir, topdown=False):
         for name in files:
             source_filename = os.path.join(root,name).replace("./","")
 
@@ -370,7 +391,7 @@ def transcode(input_dir, output_dir, output_suffix, transcode_args, stats, copy_
                 logging.debug("Skipping %s codec \"%s\"", name, codec_name)
 
                 if copy_others is True:
-                    dest_filename = os.path.join(output_dir, os.path.basename(source_filename))
+                    dest_filename = os.path.join(transcode_args.output_dir, os.path.basename(source_filename))
                     if os.path.exists(dest_filename) is False:
                         log_info("Copying %s" % (dest_filename))
                         shutil.copyfile(source_filename, dest_filename)
@@ -378,12 +399,12 @@ def transcode(input_dir, output_dir, output_suffix, transcode_args, stats, copy_
                 continue
 
             output_filename, ext = os.path.splitext(source_filename)
-            output_filename += output_suffix + default_container_by_codec.get(transcode_args.output_video_codec)
+            output_filename += transcode_args.output_suffix + default_container_by_codec.get(transcode_args.output_video_codec)
 
             if ext.lower() in skip_ext:
                 continue
 
-            output_file = os.path.join(output_dir, os.path.basename(output_filename))
+            output_file = os.path.join(transcode_args.output_dir, os.path.basename(output_filename))
 
             if os.path.exists(output_file) is True:
 
@@ -455,45 +476,18 @@ def main(argv=None):
     # setup signal interupt handler
     signal.signal(signal.SIGINT, signal_handler)
 
-    encoder_args = ""
-    output_video_codec = "hevc"
-
-    if args.map_args is not None:
-        encoder_args += args.map_args
-    elif args.default_map is False:
-        encoder_args += " -map 0 "
-
-    if args.strip_metadata is True:
-        encoder_args += " -map_metadata -1 "
-
-    if args.video_codec_name is not None:
-        encoder_args += default_video_encoder_args_by_codec.get(args.video_codec_name)
-        output_video_codec = args.video_codec_name
-    elif args.encoder_args is not None:
-        encoder_args += args.encoder_args
-    else:
-        encoder_args += default_video_encoder_args_by_codec.get(output_video_codec)
-
     if args.output_dir is not None:
         os.makedirs(args.output_dir, exist_ok=True)
 
     if args.stdout_path is not None and args.stderr_path is not None:
         with open(args.stdout_path, "w+") as cmd_stdout, open(args.stderr_path, "w+") as cmd_stderr:
-            transcoder_args = TranscoderArgs(encoder_args,
-                                            output_video_codec,
-                                            args.duration_diff_tolerance_in_frames,
-                                            args.percent_tolerance,
-                                            stdout = cmd_stdout,
-                                            stderr = cmd_stderr)
-            transcode(args.input_dir, args.output_dir, args.output_suffix, transcoder_args, stats, args.copy_others)
+            transcoder_args = TranscoderArgs(args, stdout = cmd_stdout, stderr = cmd_stderr)
+            transcode(transcoder_args, stats, args.copy_others)
 
             print_summary(transcoder_args)
     else:
-        transcoder_args = TranscoderArgs(encoder_args,
-                                            output_video_codec,
-                                            args.duration_diff_tolerance_in_frames,
-                                            args.percent_tolerance)
-        transcode(args.input_dir, args.output_dir, args.output_suffix, transcoder_args, stats, args.copy_others)
+        transcoder_args = TranscoderArgs(args)
+        transcode(transcoder_args, stats, args.copy_others)
 
         print_summary(transcoder_args)
 
