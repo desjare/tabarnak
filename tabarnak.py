@@ -5,7 +5,7 @@ tabarnak - transcode all basically accessible resolutely not all Klingon transco
 # pylint: disable=line-too-long
 # pylint: disable=import-outside-toplevel
 # pylint: disable=too-many-locals
-# pylint: disable=too-many-instance-attributes
+
 
 import argparse
 import logging
@@ -20,6 +20,7 @@ if sys.version_info < (3,6):
 
 # ffprobe
 ffprobe_path = shutil.which("ffprobe")
+ffmpeg_path = shutil.which("ffmpeg")
 
 probe_cmd = [ffprobe_path, "-v", "error"]
 probe_of = ["-of" , "default=noprint_wrappers=1:nokey=1"]
@@ -30,19 +31,6 @@ probe_duration_cmd = probe_cmd + ["-show_entries", "format=duration"] + probe_of
 # codec & configurations
 VIDEO_CODECS = ["hevc", "h264", "dvvideo", "mpeg4", "msmpeg4v3", "dnxhd"]
 
-default_container_by_codec = {
-    "h264": ".mkv",
-    "hevc" : ".mkv",
-    "av1" : ".mkv",
-    "vp9" : ".webm"
-}
-
-default_video_encoder_args_by_codec = {
-    "h264" : " -c:v libx264 -crf 30 ",
-    "hevc" : " -c:v libx265 -crf 28 ",
-    "av1" : " -c:v libaom-av1 -crf 30 -b:v 2000k -strict experimental -row-mt 1 -tile-columns 4 -tile-rows 4 -threads 12",
-    "vp9" : " -c:v libvpx-vp9 -crf 30 -b:v 2000k "
-}
 
 # extensions to ignore
 skip_ext = [".srt", ".jpg", ".txt", ".py", ".pyc"]
@@ -51,17 +39,43 @@ infos = []
 errors = []
 warnings = []
 
-class TranscoderArgs:
+class TranscoderConfig:
     """
-    transcoder arguments and options
+    transcoder configuration
     """
-    def __init__(self, args, stdout=sys.stdout, stderr=sys.stderr):
-        self.args = args
+    def __init__(self):
+        self.container_ext_by_config_name = {
+            "h264": ".mkv",
+            "hevc" : ".mkv",
+            "av1" : ".mkv",
+            "vp9" : ".webm"
+        }
 
-        self.input_dir = args.input_dir
-        self.output_dir = args.output_dir
-        self.output_suffix = args.output_suffix
+        self.video_encoder_args_by_config = {
+            "h264" : " -c:v libx264 -crf 30 ",
+            "hevc" : " -c:v libx265 -crf 28 ",
+            "av1" : " -c:v libaom-av1 -crf 30 -b:v 2000k -strict experimental -row-mt 1 -tile-columns 4 -tile-rows 4 -threads 12",
+            "vp9" : " -c:v libvpx-vp9 -crf 30 -b:v 2000k "
+        }
 
+
+    def get_container_ext(self, config_name:str) -> str:
+        """
+        return container extension based on config name
+        """
+        return self.container_ext_by_config_name.get(config_name)
+
+    def get_encoder_args(self, config_name:str) -> str:
+        """
+        return encoder args based on config name
+        """
+        return self.video_encoder_args_by_config.get(config_name)
+
+class TranscoderEncoderArgs:
+    """
+    transcoder encoder args
+    """
+    def __init__(self, args, config):
         self.encoder_args = ""
         self.output_video_codec = "hevc"
 
@@ -73,22 +87,109 @@ class TranscoderArgs:
         if args.strip_metadata is True:
             self.encoder_args += " -map_metadata -1 "
 
-        if args.video_codec_name is not None:
-            self.encoder_args += default_video_encoder_args_by_codec.get(args.video_codec_name)
-            self.output_video_codec = args.video_codec_name
+        if args.video_config_name is not None:
+            self.encoder_args += config.get_encoder_args(args.video_config_name)
+            self.output_video_codec = args.video_config_name
         elif args.encoder_args is not None:
             self.encoder_args += args.encoder_args
         else:
-            self.encoder_args += default_video_encoder_args_by_codec.get(self.output_video_codec)
+            self.encoder_args += config.get_encoder_args(self.output_video_codec)
+
+    def get_output_video_codec(self):
+        """
+        return output video code name
+        """
+        return self.output_video_codec
+
+    def get_args(self):
+        """
+        return encoder ffmpeg encoder args
+        """
+        return self.encoder_args
+
+class TranscoderInputOutputArgs:
+    """
+    transcoder configuration
+    """
+    def __init__(self, args):
+        self.input_dir = args.input_dir
+        self.output_dir = args.output_dir
+        self.output_suffix = args.output_suffix
+
+    def get_input_dir(self) -> str:
+        """
+        return input directory
+        """
+        return self.input_dir
+
+    def get_output_dir(self) -> str:
+        """
+        return output directory
+        """
+        return self.output_dir
+
+
+    def get_output_dir(self) -> str:
+        """
+        return output directory
+        """
+        return self.output_dir
+
+    def get_output_suffix(self) -> str:
+        """
+        return output suffix
+        """
+        return self.output_suffix
+
+class TranscoderArgs:
+    """
+    transcoder arguments and options
+    """
+    def __init__(self, args, stdout=sys.stdout, stderr=sys.stderr):
+        self.args = args
+
+        self.input_output_args = TranscoderInputOutputArgs(args)
+        self.config = TranscoderConfig()
+        self.encoder_args = TranscoderEncoderArgs(args, self.config)
 
         self.stdout = stdout
         self.stderr = stderr
+
+    def get_input_dir(self) -> str:
+        """
+        return transcoder input dir
+        """
+        return self.input_output_args.get_input_dir()
+
+    def get_output_dir(self) -> str:
+        """
+        return transcoder output dir
+        """
+        return self.input_output_args.get_output_dir()
+
+    def get_output_suffix(self) -> str:
+        """
+        return transcoder output suffix
+        """
+        return self.input_output_args.get_output_suffix()
+
+    def get_output_video_codec(self):
+        """
+        return output video codec name from encoder args
+        """
+        return self.encoder_args.get_output_video_codec()
+
+    def get_container_ext(self):
+        """
+        return container extension based on transcoder args
+        """
+        return self.config.get_container_ext(self.get_output_video_codec())
 
     def get_encoder_args(self):
         """
         fetch encoder arguments for ffmpeg
         """
-        return self.encoder_args
+        return self.encoder_args.get_args()
 
     def get_diff_tolerance_in_frames(self):
         """
@@ -287,6 +388,10 @@ def fetch_codec_name(path):
     """
     return codec name of a media file giving its path
     """
+    _, ext = os.path.splitext(path)
+    if ext in skip_ext:
+        return ""
+
     check_output_cmd = probe_codec_cmd.copy()
     check_output_cmd += [path]
 
@@ -306,6 +411,10 @@ def fetch_duration_in_frames(path):
     """
     fetch duration in frames (int) of a media file giving its path
     """
+    _, ext = os.path.splitext(path)
+    if ext in skip_ext:
+        return 0
+
     check_output_cmd = probe_duration_cmd.copy()
     check_output_cmd += [path]
 
@@ -360,7 +469,7 @@ def transcode_file(source_filename, codec_name, transcode_args, stats, output_fi
     encoder_args =  transcode_args.get_encoder_args().strip().split(" ")
     encoder_args = list(filter(lambda a: a != '', encoder_args))
 
-    cmd = ["ffmpeg", "-i", source_filename] + encoder_args + [output_file]
+    cmd = [ffmpeg_path, "-i", source_filename] + encoder_args + [output_file]
     log_info("Running: %s" % (cmd))
 
     results = subprocess.run(cmd, stdout=transcode_args.stdout, stderr=transcode_args.stderr, check=False)
@@ -381,17 +490,17 @@ def transcode(transcode_args, stats, copy_others):
     walk into a directory and transcode all media file to specified parameters
     """
 
-    for root, _, files in os.walk(transcode_args.input_dir, topdown=False):
+    for root, _, files in os.walk(transcode_args.get_input_dir(), topdown=False):
         for name in files:
             source_filename = os.path.join(root,name).replace("./","")
 
             codec_name = fetch_codec_name(source_filename)
-            if codec_name in transcode_args.output_video_codec:
+            if codec_name in transcode_args.get_output_video_codec():
 
                 logging.debug("Skipping %s codec \"%s\"", name, codec_name)
 
                 if copy_others is True:
-                    dest_filename = os.path.join(transcode_args.output_dir, os.path.basename(source_filename))
+                    dest_filename = os.path.join(transcode_args.get_output_dir(), os.path.basename(source_filename))
                     if os.path.exists(dest_filename) is False:
                         log_info("Copying %s" % (dest_filename))
                         shutil.copyfile(source_filename, dest_filename)
@@ -399,12 +508,12 @@ def transcode(transcode_args, stats, copy_others):
                 continue
 
             output_filename, ext = os.path.splitext(source_filename)
-            output_filename += transcode_args.output_suffix + default_container_by_codec.get(transcode_args.output_video_codec)
+            output_filename += transcode_args.get_output_suffix() + transcode_args.get_container_ext()
 
             if ext.lower() in skip_ext:
                 continue
 
-            output_file = os.path.join(transcode_args.output_dir, os.path.basename(output_filename))
+            output_file = os.path.join(transcode_args.get_output_dir(), os.path.basename(output_filename))
 
             if os.path.exists(output_file) is True:
 
@@ -440,10 +549,10 @@ def parse_args(argv):
     parser.add_argument("--duration-tolerance", type=int, default=30, dest="duration_diff_tolerance_in_frames", help="duration difference in frames that is tolerated")
     parser.add_argument("--percent-tolerance", type=int, default=95, dest="percent_tolerance", help="percent difference that is tolerated")
     parser.add_argument("--encoder-args", type=str, default=None, dest="encoder_args", help="override default encoder args")
-    parser.add_argument("--h264", action="store_const", const="h264", dest="video_codec_name", help="specify h264 codec")
-    parser.add_argument("--hevc", action="store_const", const="hevc", dest="video_codec_name", help="specify hevc codec")
-    parser.add_argument("--av1", action="store_const", const="av1", dest="video_codec_name", help="specify av1 codec")
-    parser.add_argument("--vp9", action="store_const", const="vp9", dest="video_codec_name", help="specify vp9 codec")
+    parser.add_argument("--h264", action="store_const", const="h264", dest="video_config_name", help="specify h264 codec")
+    parser.add_argument("--hevc", action="store_const", const="hevc", dest="video_config_name", help="specify hevc codec")
+    parser.add_argument("--av1", action="store_const", const="av1", dest="video_config_name", help="specify av1 codec")
+    parser.add_argument("--vp9", action="store_const", const="vp9", dest="video_config_name", help="specify vp9 codec")
 
     if argv is not None:
         def error(message):

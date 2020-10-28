@@ -79,14 +79,16 @@ class TestCaseBase(unittest.TestCase):
                     with open(self.stdout_path, "r") as cmd_stdout:
                         print("\nOutputing stdout:\n%s" % (cmd_stdout.read()))
                 except IOError as error:
-                    print("Error outputing stderr %s" % (error))
+                    if self.do_test_tear_down is False:
+                        print("Error outputing stderr %s" % (error))
 
                 try:
                     with open(self.stderr_path, "r") as cmd_stderr:
                         print("\nOutputing stderr:\n%s" % (cmd_stderr.read()))
 
                 except IOError as error:
-                    print("Error outputing stderr %s" % (error))
+                    if self.do_test_tear_down is False:
+                        print("Error outputing stderr %s" % (error))
 
         shutil.rmtree(self.output_dir, ignore_errors=True)
         self.output_dir = None
