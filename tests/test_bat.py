@@ -77,12 +77,10 @@ class TestBAT(TestCaseBase):
         """
         Basic encoding test using BAT directory as source existing file in output directory
         """
-        input_dir = os.path.join(test_dir, "BAT", "H264")
-
         output_file_path = os.path.join(self.output_dir, TEST_H264_FILE_2_SECONDS)
         shutil.copyfile(TEST_H264_PATH_2_SECONDS, output_file_path)
 
-        cmd = self.cmd + ["--input-dir", input_dir]
+        cmd = self.cmd + ["--input-dir", TEST_BAT_H264_DIR]
         self.run_cmd(cmd)
 
     def test_enable_prometheus_logging(self):

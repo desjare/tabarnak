@@ -383,6 +383,7 @@ def fetch_codec_name(path):
     """
     _, ext = os.path.splitext(path)
     if ext in skip_ext:
+        log_warning("fetch_code_name on ext %s" % (ext))
         return ""
 
     check_output_cmd = probe_codec_cmd.copy()
@@ -404,10 +405,6 @@ def fetch_duration_in_frames(path):
     """
     fetch duration in frames (int) of a media file giving its path
     """
-    _, ext = os.path.splitext(path)
-    if ext in skip_ext:
-        return 0
-
     check_output_cmd = probe_duration_cmd.copy()
     check_output_cmd += [path]
 
@@ -512,8 +509,7 @@ def transcode(transcode_args, stats, copy_others):
 
                 input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename,output_file, codec_name, transcode_args, stats)
 
-                logging.debug("Skipping %s exists. %s", output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved))
-
+                logging.info("Skipping %s exists. %s", output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved))
                 continue
 
             transcode_file(source_filename, codec_name, transcode_args, stats, output_file)
