@@ -15,8 +15,8 @@ import sys
 import subprocess
 import shutil
 
-if sys.version_info < (3,6):
-    raise Exception("Must be using Python 3.6")
+if sys.version_info < (3,7):
+    raise Exception("Must be using Python 3.7")
 
 # ffprobe
 ffprobe_path = shutil.which("ffprobe")
@@ -474,7 +474,6 @@ def transcode_file(source_filename, codec_name, transcode_args, stats, output_fi
     cmd = [ffmpeg_path, "-i", source_filename] + encoder_args + [output_file]
     log_info("Running: %s" % (cmd))
 
-    #results = subprocess.run(cmd, stdout=transcode_args.stdout, stderr=transcode_args.stderr, check=False)
     results = subprocess.run(cmd, capture_output=True, encoding="utf-8", check=False)
 
     if results.stdout is not None:
@@ -484,15 +483,14 @@ def transcode_file(source_filename, codec_name, transcode_args, stats, output_fi
         transcode_args.stderr.write(results.stderr)
 
     if results.returncode != 0:
-
         log_error("Error running %s" % (cmd))
         remove_file(output_file)
-
         return
 
     if fetch_duration_in_frames(output_file) == 0:
         log_error("Error running %s: zero duration for %s" % (cmd, output_file))
         remove_file(output_file)
+        return
 
     input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename, output_file, codec_name, transcode_args, stats)
 
