@@ -318,7 +318,8 @@ def remove_file(output_file):
     """
     log_info("Removing %s" % (output_file))
     try:
-        os.remove(output_file)
+        if os.path.exists(output_file):
+            os.remove(output_file)
     except IsADirectoryError as error:
         logging.error("Cannot remove %s:%s", output_file, error)
 
@@ -441,8 +442,19 @@ def compare_input_output(input_file, output_file, input_codec_name, transcode_ar
         delta_in_frames = output_duration - input_duration
         log_error("Duration differs input: %s:%d frames output %s:%d frames out duration - in duration:%d frames" % (input_name, input_duration, output_name, output_duration, delta_in_frames))
 
-    input_file_size = os.path.getsize(input_file)
-    output_file_size= os.path.getsize(output_file)
+    input_file_size = 0
+    try:
+        input_file_size = os.path.getsize(input_file)
+    except FileNotFoundError:
+        pass
+
+    output_file_size = 0
+    try:
+        output_file_size = os.path.getsize(output_file)
+    except FileNotFoundError:
+        pass
+
+
     saved = input_file_size - output_file_size
     saved_percent = (1. - float(output_file_size) / float(input_file_size)) * 100.
     stats.increment_total_saved(saved)
@@ -462,13 +474,25 @@ def transcode_file(source_filename, codec_name, transcode_args, stats, output_fi
     cmd = [ffmpeg_path, "-i", source_filename] + encoder_args + [output_file]
     log_info("Running: %s" % (cmd))
 
-    results = subprocess.run(cmd, stdout=transcode_args.stdout, stderr=transcode_args.stderr, check=False)
+    #results = subprocess.run(cmd, stdout=transcode_args.stdout, stderr=transcode_args.stderr, check=False)
+    results = subprocess.run(cmd, capture_output=True, encoding="utf-8", check=False)
+
+    if results.stdout is not None:
+        transcode_args.stdout.write(results.stdout)
+
+    if results.stderr is not None:
+        transcode_args.stderr.write(results.stderr)
+
     if results.returncode != 0:
 
         log_error("Error running %s" % (cmd))
         remove_file(output_file)
 
         return
+
+    if fetch_duration_in_frames(output_file) == 0:
+        log_error("Error running %s: zero duration for %s" % (cmd, output_file))
+        remove_file(output_file)
 
     input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename, output_file, codec_name, transcode_args, stats)
 
