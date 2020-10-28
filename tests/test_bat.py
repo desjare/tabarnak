@@ -5,11 +5,13 @@ import os
 import shutil
 import unittest
 
-from tabarnak_test_case import TabarnakTestCase
+from tests.test_case_base import TestCaseBase
+from tests.config import TEST_BAT_H264_DIR, TEST_BAT_INVALID_DIR
+from tests.config import TEST_H264_FILE_2_SECONDS, TEST_H264_PATH_2_SECONDS
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
 
-class TestBAT(TabarnakTestCase):
+class TestBAT(TestCaseBase):
     """
     Basic Acceptance Test TestCase
     """
@@ -18,10 +20,8 @@ class TestBAT(TabarnakTestCase):
         """
         Basic encoding test using BAT directory as source
         """
-        input_dir = os.path.join(test_dir, "BAT", "H264")
-
-        cmd = self.tabarnak_cmd + ["--input-dir", input_dir, "--copy"]
-        self.run_tabarnak(cmd)
+        cmd = self.cmd + ["--input-dir", TEST_BAT_H264_DIR, "--copy"]
+        self.run_cmd(cmd)
 
         self.assert_codec_name(self.output_dir, "hevc")
         self.assert_copy(self.output_dir, 1)
@@ -30,14 +30,12 @@ class TestBAT(TabarnakTestCase):
         """
         Basic encoding test using BAT directory as source without redirecting outputs and errors
         """
-        input_dir = os.path.join(test_dir, "BAT", "H264")
-
-        cmd = self.tabarnak_basic_cmd + ["--input-dir", input_dir]
+        cmd = self.basic_cmd + ["--input-dir", TEST_BAT_H264_DIR]
         cmd += ["--strip-metadata", "--map-args", "-map 0"]
         cmd += ["--encoder-args", "-c:v libx265 -crf 20"]
         cmd += ["--duration-tolerance", 0]
         cmd += ["--percent-tolerance", 0]
-        self.run_tabarnak(cmd)
+        self.run_cmd(cmd)
 
         self.assert_codec_name(self.output_dir, "hevc")
 
@@ -45,12 +43,11 @@ class TestBAT(TabarnakTestCase):
         """
         Basic encoding failure using invalid argument
         """
-        input_dir = os.path.join(test_dir, "BAT", "H264")
-        args = ["--input-dir", input_dir, "--invalid-args"]
-        cmd = self.tabarnak_cmd + args
+        args = ["--input-dir", TEST_BAT_H264_DIR, "--invalid-args"]
+        cmd = self.cmd + args
 
         try:
-            self.run_tabarnak(cmd)
+            self.run_cmd(cmd)
         except ChildProcessError:
             pass
 
@@ -58,12 +55,11 @@ class TestBAT(TabarnakTestCase):
         """
         Basic encoding failure using invalid input
         """
-        input_dir = os.path.join(test_dir, "BAT", "INVALID")
-        args = ["--input-dir", input_dir]
-        cmd = self.tabarnak_cmd + args
+        args = ["--input-dir", TEST_BAT_INVALID_DIR]
+        cmd = self.cmd + args
 
         try:
-            self.run_tabarnak(cmd)
+            self.run_cmd(cmd)
         except ChildProcessError:
             pass
 
@@ -71,10 +67,8 @@ class TestBAT(TabarnakTestCase):
         """
         Basic encoding test using BAT directory as source using h264
         """
-        input_dir = os.path.join(test_dir, "BAT", "H264")
-
-        cmd = self.tabarnak_cmd + ["--input-dir", input_dir, "--h264"]
-        self.run_tabarnak(cmd)
+        cmd = self.cmd + ["--input-dir", TEST_BAT_H264_DIR, "--h264"]
+        self.run_cmd(cmd)
 
         # no files should be outputted
         self.assert_codec_name(self.output_dir, "h264", 0)
@@ -85,25 +79,21 @@ class TestBAT(TabarnakTestCase):
         """
         input_dir = os.path.join(test_dir, "BAT", "H264")
 
-        input_file = "H.264-720x480-1-audio-tracks-mono-vorbis-eng-2-seconds.mkv"
-        input_file_path = os.path.join(test_dir, "BAT", "H264", input_file)
-        output_file_path = os.path.join(self.output_dir, input_file)
+        output_file_path = os.path.join(self.output_dir, TEST_H264_FILE_2_SECONDS)
+        shutil.copyfile(TEST_H264_PATH_2_SECONDS, output_file_path)
 
-        shutil.copyfile(input_file_path, output_file_path)
-
-        cmd = self.tabarnak_cmd + ["--input-dir", input_dir]
-        self.run_tabarnak(cmd)
+        cmd = self.cmd + ["--input-dir", input_dir]
+        self.run_cmd(cmd)
 
     def test_enable_prometheus_logging(self):
         """
         Basic encoding test using BAT directory as source and enable prometheus logging
         """
-        input_dir = os.path.join(test_dir, "BAT", "H264")
         prometheus_log_path = os.path.join(self.output_dir, self.id() + ".prom")
 
-        cmd = self.tabarnak_cmd + ["--input-dir", input_dir]
+        cmd = self.cmd + ["--input-dir", TEST_BAT_H264_DIR]
         cmd += ["--use-prometheus-logging", "--prometheus-log-path", prometheus_log_path]
-        self.run_tabarnak(cmd)
+        self.run_cmd(cmd)
 
         self.assert_codec_name(self.output_dir, "hevc")
 

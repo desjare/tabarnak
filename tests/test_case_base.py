@@ -26,7 +26,7 @@ test_dir = os.path.dirname(os.path.abspath(__file__))
 
 tabarnak_path = os.path.join(test_dir, "..", "tabarnak.py")
 
-class TabarnakTestCase(unittest.TestCase):
+class TestCaseBase(unittest.TestCase):
     """
     Base unittest.TestCase for all transcoder test case classes
     """
@@ -48,14 +48,15 @@ class TabarnakTestCase(unittest.TestCase):
         self.stdout_path = os.path.join(self.output_dir, self.id()+"-stdout.txt")
         self.stderr_path = os.path.join(self.output_dir, self.id()+"-stderr.txt")
 
-        self.tarbarnak_log_args = ["--log-path", self.test_log_path]
+        self.log_args = ["--log-path", self.test_log_path]
 
-        self.tabarnak_basic_cmd = ["--output-dir", self.output_dir]
-        self.tabarnak_basic_cmd += self.tarbarnak_log_args
-        self.tabarnak_cmd = self.tabarnak_basic_cmd.copy()
-        self.tabarnak_cmd += ["--stdout-path", self.stdout_path]
-        self.tabarnak_cmd += ["--stderr-path", self.stderr_path]
+        self.basic_cmd = ["--output-dir", self.output_dir]
+        self.basic_cmd += self.log_args
+        self.cmd = self.basic_cmd.copy()
+        self.cmd += ["--stdout-path", self.stdout_path]
+        self.cmd += ["--stderr-path", self.stderr_path]
 
+        self.do_test_tear_down = False
 
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -65,7 +66,7 @@ class TabarnakTestCase(unittest.TestCase):
         """
 
         # check for errors and output stdout and stderr
-        if hasattr(self, '_outcome'):
+        if hasattr(self, '_outcome') or self.do_test_tear_down is True:
             result = self.defaultTestResult()  # these 2 methods have no side effects
             self._feedErrorsToResult(result, self._outcome.errors)
 
@@ -73,7 +74,7 @@ class TabarnakTestCase(unittest.TestCase):
             failure = self.list_to_reason(result.failures)
             is_ok = not error and not failure
 
-            if not is_ok:
+            if not is_ok or self.do_test_tear_down is True:
                 try:
                     with open(self.stdout_path, "r") as cmd_stdout:
                         print("\nOutputing stdout:\n%s" % (cmd_stdout.read()))
@@ -93,7 +94,13 @@ class TabarnakTestCase(unittest.TestCase):
         self.stdout_path = None
         self.stderr_path = None
 
-    def run_tabarnak(self, cmd):
+    def test_tear_down(self):
+        """
+        teardown test to improve test coverage
+        """
+        self.do_test_tear_down = True
+
+    def run_cmd(self, cmd):
         """
         run tarbarnak main utility method
         """
