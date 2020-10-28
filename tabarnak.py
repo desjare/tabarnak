@@ -128,13 +128,6 @@ class TranscoderInputOutputArgs:
         """
         return self.output_dir
 
-
-    def get_output_dir(self) -> str:
-        """
-        return output directory
-        """
-        return self.output_dir
-
     def get_output_suffix(self) -> str:
         """
         return output suffix
