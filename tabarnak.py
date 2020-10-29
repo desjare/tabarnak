@@ -35,9 +35,60 @@ VIDEO_CODECS = ["hevc", "h264", "dvvideo", "mpeg4", "msmpeg4v3", "dnxhd"]
 # extensions to ignore
 skip_ext = [".srt", ".jpg", ".txt", ".py", ".pyc"]
 
-infos = []
-errors = []
-warnings = []
+class TranscoderResults:
+    """
+    transcoder results class containing informatin about job results
+    """
+
+    def __init__(self):
+        self.infos = []
+        self.errors = []
+        self.warnings = []
+
+    def info(self,message:str):
+        """
+        add an information message
+        """
+        self.infos.append(message)
+
+    def warning(self, message:str):
+        """
+        add a warning message
+        """
+        self.warnings.append(message)
+
+    def error(self, message:str):
+        """
+        add a warning message
+        """
+        self.warnings.append(message)
+
+    def print_summary(self, transcoder_args=None):
+        """
+        print a summary of transcoder operations including infos, warnings and errors
+        """
+
+        stdout = sys.stdout
+        if transcoder_args:
+            stdout = transcoder_args.stdout
+
+        print("\nSummary:\n", file=stdout)
+
+        print("\n".join(self.infos), file=stdout)
+        print("", file=stdout)
+
+        if len(self.warnings) > 0:
+            print("Warnings:", file=stdout)
+            print("\n".join(self.warnings), file=stdout)
+            print("", file=stdout)
+
+        if len(self.errors) > 0:
+            print("Errors:", file=stdout)
+            print("\n".join(self.errors), file=stdout)
+            print("", file=stdout)
+
+# transcoder results
+transcoder_results = TranscoderResults()
 
 class TranscoderConfig:
     """
@@ -291,32 +342,11 @@ def close_logging(args):
         from prometheus_client import REGISTRY, write_to_textfile
         write_to_textfile('transcode.prom', REGISTRY)
 
-def log_info(info):
-    """
-    log info and append to info logging list
-    """
-    infos.append(info)
-    logging.info(info)
-
-def log_warning(warning):
-    """
-    log warning and append to warning logging list
-    """
-    warnings.append(warning)
-    logging.warning(warning)
-
-def log_error(error):
-    """
-    log error and append to error logging list
-    """
-    errors.append(error)
-    logging.error(error)
-
 def remove_file(output_file):
     """
     remove a file and ignore exception
     """
-    log_info("Removing %s" % (output_file))
+    transcoder_results.info("Removing %s" % (output_file))
     try:
         if os.path.exists(output_file):
             os.remove(output_file)
@@ -344,39 +374,16 @@ def format_input_output(input_file_size, output_file_size, saved, saved_percent,
 
     return "Input Size: %s Output Size: %s Saved: %s %2.2f percent Total %s" % (input_fmt, output_fmt, saved_fmt, saved_percent, total_saved_fmt)
 
-def print_summary(transcoder_args=None):
-    """
-    print a summary of transcoder operations including infos, warnings and errors
-    """
-
-    stdout = sys.stdout
-    if transcoder_args:
-        stdout = transcoder_args.stdout
-
-    print("\nSummary:\n", file=stdout)
-
-    print("\n".join(infos), file=stdout)
-    print("", file=stdout)
-
-    if len(warnings) > 0:
-        print("Warnings:", file=stdout)
-        print("\n".join(warnings), file=stdout)
-        print("", file=stdout)
-
-    if len(errors) > 0:
-        print("Errors:", file=stdout)
-        print("\n".join(errors), file=stdout)
-        print("", file=stdout)
-
 def signal_handler(signal_number, _):
     """
     signal handler for the transcoder
     """
     logging.error("Interupted %d", signal_number)
 
-    print_summary()
+    transcoder_results.print_summary()
 
-    sys.exit(1)
+    if signal_number != signal.SIGUSR1:
+        sys.exit(1)
 
 def fetch_codec_name(path):
     """
@@ -384,7 +391,8 @@ def fetch_codec_name(path):
     """
     _, ext = os.path.splitext(path)
     if ext in skip_ext:
-        log_warning("fetch_code_name on ext %s" % (ext))
+        transcoder_results.warning("fetch_code_name on ext: %s" % (ext))
+        logging.warning("fetch_code_name on ext: %s", ext)
         return ""
 
     check_output_cmd = probe_codec_cmd.copy()
@@ -392,12 +400,14 @@ def fetch_codec_name(path):
 
     results = subprocess.run(check_output_cmd, stdout=subprocess.PIPE, check=False)
     if results.returncode != 0:
-        log_error("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
+        transcoder_results.error("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
+        logging.error("Cannot run ffprobe on %s error: %d", path, results.returncode)
         return ""
     codec = results.stdout.decode('utf-8').replace("\n","")
 
     if codec == "" or codec not in VIDEO_CODECS:
-        log_error("Invalid codec \"%s\" for %s" % (codec, path))
+        transcoder_results.error("Invalid codec \"%s\" for %s" % (codec, path))
+        logging.error("Invalid codec \"%s\" for %s", codec, path)
         return ""
 
     return codec
@@ -411,8 +421,10 @@ def fetch_duration_in_frames(path):
 
     results = subprocess.run(check_output_cmd, stdout=subprocess.PIPE, check=False)
     if results.returncode != 0:
-        log_error("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
+        transcoder_results.error("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
+        logging.error("Cannot run ffprobe on %s error: %d", path, results.returncode)
         return 0
+
     duration = results.stdout.decode('utf-8').replace("\n","")
 
     frame_duration = 0.0
@@ -422,7 +434,8 @@ def fetch_duration_in_frames(path):
         pass
 
     if int(frame_duration) == 0:
-        log_error("Zero Duration for %s" % (path))
+        transcoder_results.error("ffprobe zero duuration for %s" % (path))
+        logging.error("ffprobe zero duuration for %s", path)
 
     return int(frame_duration)
 
@@ -440,7 +453,9 @@ def compare_input_output(input_file, output_file, input_codec_name, transcode_ar
     duration_diff = abs(input_duration - output_duration)
     if duration_diff > transcode_args.get_diff_tolerance_in_frames():
         delta_in_frames = output_duration - input_duration
-        log_error("Duration differs input: %s:%d frames output %s:%d frames out duration - in duration:%d frames" % (input_name, input_duration, output_name, output_duration, delta_in_frames))
+        transcoder_results.error("compare_input_output duration differs input: %s:%d frames output %s:%d frames out duration - in duration:%d frames" % (input_name, input_duration, output_name, output_duration, delta_in_frames))
+        logging.error("compare_input_output duration differs input: %s:%d frames output %s:%d frames out duration - in duration:%d frames",
+                        input_name, input_duration, output_name, output_duration, delta_in_frames )
 
     input_file_size = 0
     try:
@@ -460,7 +475,9 @@ def compare_input_output(input_file, output_file, input_codec_name, transcode_ar
     stats.increment_total_saved(saved)
 
     if saved_percent > transcode_args.get_percent_tolerance():
-        log_warning("File size percent difference is too high: %2.2f for file %s  Input codec %s" % (saved_percent, os.path.basename(output_file), input_codec_name))
+        transcoder_results.warning("compare_input_output file size percent difference is too high: %2.2f for file %s  Input codec %s" % (saved_percent, os.path.basename(output_file), input_codec_name))
+        logging.warning("compare_input_output file size percent difference is too high: %2.2f for file %s  Input codec %s",
+                        saved_percent, os.path.basename(output_file), input_codec_name)
 
     return (input_file_size, output_file_size, saved, saved_percent, stats.get_total_saved())
 
@@ -472,7 +489,8 @@ def transcode_file(source_filename, codec_name, transcode_args, stats, output_fi
     encoder_args = list(filter(lambda a: a != '', encoder_args))
 
     cmd = [ffmpeg_path, "-i", source_filename] + encoder_args + [output_file]
-    log_info("Running: %s" % (cmd))
+    transcoder_results.info("transcode_file running %s" % (cmd))
+    logging.info("transcode_file running %s", cmd)
 
     results = subprocess.run(cmd, capture_output=True, encoding="utf-8", check=False)
 
@@ -483,18 +501,22 @@ def transcode_file(source_filename, codec_name, transcode_args, stats, output_fi
         transcode_args.stderr.write(results.stderr)
 
     if results.returncode != 0:
-        log_error("Error running %s" % (cmd))
+        transcoder_results.error("transcode_file error running %s returncode: %d" % (cmd, results.returncode))
+        logging.error("transcode_file error running %s returncode: %d", cmd, results.returncode)
         remove_file(output_file)
         return
 
     if fetch_duration_in_frames(output_file) == 0:
-        log_error("Error running %s: zero duration for %s" % (cmd, output_file))
+        transcoder_results.error("transcode_file error running %s: zero duration for %s" % (cmd, output_file))
+        logging.error("transcode_file error running %s: zero duration for %s", cmd, output_file)
         remove_file(output_file)
         return
 
     input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename, output_file, codec_name, transcode_args, stats)
+    job_stats_string = format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)
 
-    log_info("Job Done: %s %s" % (output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)))
+    transcoder_results.info("transcode_file job done: %s %s" % (output_file, job_stats_string))
+    logging.info("transcode_file job done: %s %s", output_file, job_stats_string)
 
 
 def transcode(transcode_args, stats, copy_others):
@@ -514,7 +536,7 @@ def transcode(transcode_args, stats, copy_others):
                 if copy_others is True:
                     dest_filename = os.path.join(transcode_args.get_output_dir(), os.path.basename(source_filename))
                     if os.path.exists(dest_filename) is False:
-                        log_info("Copying %s" % (dest_filename))
+                        logging.info("Copying %s", dest_filename)
                         shutil.copyfile(source_filename, dest_filename)
 
                 continue
@@ -604,16 +626,18 @@ def main(argv=None):
             transcoder_args = TranscoderArgs(args, stdout = cmd_stdout, stderr = cmd_stderr)
             transcode(transcoder_args, stats, args.copy_others)
 
-            print_summary(transcoder_args)
+            transcoder_results.print_summary(transcoder_args)
     else:
         transcoder_args = TranscoderArgs(args)
         transcode(transcoder_args, stats, args.copy_others)
 
-        print_summary(transcoder_args)
+        transcoder_results.print_summary(transcoder_args)
 
     logging.info("Finished")
 
     close_logging(args)
+
+    return transcoder_results
 
 if __name__ == "__main__":
     main()
