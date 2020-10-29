@@ -19,4 +19,4 @@ jobs:
         pip install pylint prometheus_client
     - name: Analysing the code with pylint
       run: |
-        pylint tabarnak.py
+        pylint tabarnak/tabarnak.py

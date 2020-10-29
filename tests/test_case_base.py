@@ -10,7 +10,7 @@ import subprocess
 import sys
 import unittest
 
-import tabarnak
+from tabarnak import tabarnak
 
 ffprobe_path = shutil.which("ffprobe")
 
@@ -24,7 +24,7 @@ media_ext = [".mkv", ".mp4", ".webm"]
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
 
-tabarnak_path = os.path.join(test_dir, "..", "tabarnak.py")
+tabarnak_path = os.path.join(test_dir, "..", "tabarnak", "tabarnak.py")
 
 class TestCaseBase(unittest.TestCase):
     """
