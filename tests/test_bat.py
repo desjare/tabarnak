@@ -3,11 +3,15 @@ Basic Acceptance Test Module
 """
 import os
 import shutil
+import signal
+import subprocess
 import unittest
 
 from tests.test_case_base import TestCaseBase
 from tests.config import TEST_BAT_H264_DIR, TEST_BAT_INVALID_DIR
 from tests.config import TEST_H264_FILE_2_SECONDS, TEST_H264_PATH_2_SECONDS
+
+from tabarnak import signal_handler
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -94,6 +98,16 @@ class TestBAT(TestCaseBase):
         self.run_cmd(cmd)
 
         self.assert_codec_name(self.output_dir, "hevc")
+
+    def test_signal_handler(self):
+        """
+        send a signal to improve code test coverage
+        """
+        signal.signal(signal.SIGUSR1, signal_handler)
+        results = subprocess.run(["kill", "-SIGUSR1", str(os.getpid())], check=False)
+
+        self.assertTrue(results.returncode == 0)
+
 
 
 if __name__ == '__main__':
