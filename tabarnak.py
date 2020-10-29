@@ -582,10 +582,11 @@ def parse_args(argv):
     parser.add_argument("--duration-tolerance", type=int, default=30, dest="duration_diff_tolerance_in_frames", help="duration difference in frames that is tolerated")
     parser.add_argument("--percent-tolerance", type=int, default=95, dest="percent_tolerance", help="percent difference that is tolerated")
     parser.add_argument("--encoder-args", type=str, default=None, dest="encoder_args", help="override default encoder args")
-    parser.add_argument("--h264", action="store_const", const="h264", dest="video_config_name", help="specify h264 codec")
-    parser.add_argument("--hevc", action="store_const", const="hevc", dest="video_config_name", help="specify hevc codec")
-    parser.add_argument("--av1", action="store_const", const="av1", dest="video_config_name", help="specify av1 codec")
-    parser.add_argument("--vp9", action="store_const", const="vp9", dest="video_config_name", help="specify vp9 codec")
+    video_config_group = parser.add_mutually_exclusive_group()
+    video_config_group.add_argument("--h264", action="store_const", const="h264", dest="video_config_name", help="specify h264 codec")
+    video_config_group.add_argument("--hevc", action="store_const", const="hevc", dest="video_config_name", help="specify hevc codec")
+    video_config_group.add_argument("--av1", action="store_const", const="av1", dest="video_config_name", help="specify av1 codec")
+    video_config_group.add_argument("--vp9", action="store_const", const="vp9", dest="video_config_name", help="specify vp9 codec")
 
     if argv is not None:
         def error(message):
