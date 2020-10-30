@@ -1,10 +1,14 @@
-**tabarnak** - **T**ranscoder **A**ll **B**asically **A**ccessible **R**esolutely **N**ot **A**ll **K**lingon - transcode [ffmpeg](https://ffmpeg.org/) based utility tool
+# tabarnak - transcoder [FFmpeg](https://ffmpeg.org/) based utility tool
+![Port au Persil](https://github.com/desjare/tabarnak/blob/main/.www/tabarnak.png?raw=true)
 
 ![Build Status](https://travis-ci.com/desjare/tabarnak.svg?branch=main)
 ![Pylint](https://github.com/desjare/tabarnak/workflows/Pylint/badge.svg)
 [![codecov](https://codecov.io/gh/desjare/tabarnak/branch/main/graph/badge.svg?token=OTM2MYLPOM)](undefined)
 [![HitCount](http://hits.dwyl.com/desjare/desjare/tabarnak.svg)](http://hits.dwyl.com/desjare/desjare/tabarnak)
 
+In the Province of Québec tabarnak is a swear derived from the tabernacle but it is an acronym for:
+
+**T**ranscoder **A**ll **B**asically **A**ccessible **R**esolutely **N**ot **A**ll **K**lingon
 
 # Description
 This script is used to convert video or video/audio media files to modern codecs such as HEVC, VP9 or AV1 (experimental). It walks into a directory and probes media files for video that are not encoded with specified codec (default HEVC). Then it transcodes them. The idea is to use a more modern codec that has a better quality/bitrate ratio. Resulting files are significantly smaller than original h264, mpeg2, mpeg4 or likely any other formats that they are currently encoded to.
