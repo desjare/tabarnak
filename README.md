@@ -17,8 +17,12 @@ If you plan to use your media files with a chrome cast, be sure the buy **chrome
 
 ## Usage
 
+### Install
+pip3 install tabarnak-desjare
+
+### Getting help
 For help:
-python3 tabarnak.py -h
+tabarnak -h
 
 ## Requirements
 * [python3](https://www.python.org/) (tested with python 3.6.9)
