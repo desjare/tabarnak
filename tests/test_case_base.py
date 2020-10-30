@@ -106,13 +106,7 @@ class TestCaseBase(unittest.TestCase):
         """
         run tarbarnak main utility method
         """
-        argv_copy = sys.argv.copy()
-
-        try:
-            tabarnak.main(cmd)
-
-        finally:
-            sys.argv = argv_copy
+        return tabarnak.main(cmd)
 
     def assert_codec_name(self, output_dir, codec_name, count=None):
         """

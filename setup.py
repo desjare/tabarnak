@@ -7,8 +7,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="tabarnak-desjare", # Replace with your own username
-    version="0.0.2",
+    name="tabarnak-desjare",  # Replace with your own username
+    version="0.0.3",
     author="Eric Desjardins",
     author_email="desjare@gmail.com",
     description="transcoder FFmpeg based wrapper",
@@ -24,4 +24,9 @@ setuptools.setup(
         "Environment :: Console"
     ],
     python_requires='>=3.7',
+    entry_points={
+        'console_scripts': [
+            'tabarnak = tabarnak.tabarnak:main',
+        ],
+    },
 )
