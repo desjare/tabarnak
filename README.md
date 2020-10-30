@@ -24,6 +24,11 @@ pip3 install tabarnak-desjare
 For help:
 tabarnak -h
 
+### Example usage
+
+#### transcode all media files recursively using h264 codec and output them output directory 
+tabarnak --input-dir . --output-dir output --h264
+
 ## Requirements
 * [python3](https://www.python.org/) (tested with python 3.6.9)
 * [ffmpeg](https://ffmpeg.org/) in your path
