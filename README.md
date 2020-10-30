@@ -34,7 +34,7 @@ tabarnak -h
 tabarnak --input-dir . --output-dir output --h264
 
 ## Requirements
-* [python3](https://www.python.org/) (tested with python 3.6.9)
+* [python3](https://www.python.org/) (tested with python 3.7 and 3.8)
 * [ffmpeg](https://ffmpeg.org/) in your path
 
 I prepared a tutorial video to learn how to do that on Windows 10:
