@@ -9,6 +9,7 @@ tabarnak - transcode all basically accessible resolutely not all Klingon transco
 
 import argparse
 import logging
+import math
 import os
 import signal
 import sys
@@ -50,7 +51,7 @@ probe_duration_cmd = probe_cmd + ["-show_entries", "format=duration"] + probe_of
 #
 
 # codec & configurations
-VIDEO_CODECS = ["hevc", "h264", "dvvideo", "mpeg4", "msmpeg4v3", "dnxhd"]
+VIDEO_CODECS = ["hevc", "h264", "dvvideo", "mpeg4", "msmpeg4v3", "dnxhd", "vp8", "vp9"]
 
 
 # extensions to ignore
@@ -529,7 +530,7 @@ def fetch_duration_in_frames(path):
 
     frame_duration = 0.0
     try:
-        frame_duration = float(duration)
+        frame_duration = math.ceil(float(duration))
     except ValueError:
         pass
 
