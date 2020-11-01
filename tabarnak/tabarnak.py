@@ -15,6 +15,7 @@ import signal
 import sys
 import subprocess
 import shutil
+import yaml
 
 # python 3.7 required due to subprocess
 if sys.version_info < (3,7):
@@ -65,12 +66,29 @@ class TrancodeFileResult:
     transcoder file result containing information about outcome
     of transcoding
     """
-    def __init__(self):
+    YAMLTag = u"!TrancodeFileResult"
+
+    def __init__(self, path):
+        self.path = path
         self.infos: [str]= []
         self.errors: [str] = []
         self.warnings: [str] = []
         self.exceptions: [str] = []
         self.fails_on_tolerance: [str] = []
+
+    def __repr__(self):
+        return self.__class__.__name__
+
+    def as_dict(self):
+        """
+        return object as a dict
+        """
+        return dict(path=self.path,
+                    infos=self.infos,
+                    warnings=self.warnings,
+                    errors=self.errors,
+                    exception=self.exceptions,
+                    fails_on_tolerance=self.fails_on_tolerance)
 
     def status(self) -> bool:
         """
@@ -108,33 +126,69 @@ class TrancodeFileResult:
         """
         self.fails_on_tolerance.append(message)
 
+    @staticmethod
+    def to_yaml(dumper, data):
+        """
+        dump the file to yaml
+        """
+        return dumper.represent_mapping(data.YAMLTag, data.as_dict())
+
+yaml.add_representer(TrancodeFileResult, TrancodeFileResult.to_yaml, Dumper=yaml.SafeDumper)
+
 class TranscoderResults:
     """
     transcoder results class containing informatin about job results
     """
+    YAMLTag = u"!TranscoderResults"
+
     def __init__(self):
         self.infos = []
         self.errors = []
         self.warnings = []
+        self.exceptions = []
         self.file_result : TrancodeFileResult = None
         self.file_results :[TrancodeFileResult] = []
 
+    def __repr__(self):
+        return self.__class__.__name__
+
     def __enter__(self):
-        self.file_result = TrancodeFileResult()
-        self.file_results.append(self.file_result)
+        pass
 
     def __exit__(self, exc_type, exc_value, _):
         if exc_type:
             logging.debug("TranscoderResults __exit__ %s:%s", exc_type, exc_value)
-            self.file_result.exception("%s:%s" % (exc_type, exc_value))
-        self.file_result = None
+            if self.file_result is not None:
+                self.file_result.exception("%s:%s" % (exc_type, exc_value))
+            else:
+                self.exception("%s:%s" % (exc_type, exc_value))
         # do not propagate exception
         return True
+
+    def set_file_result(self, file_result: TrancodeFileResult):
+        """
+        set current file result
+        """
+        self.file_result = file_result
+        self.file_results.append(file_result)
+
+    def as_dict(self):
+        """
+        return object as a dict
+        """
+        return dict(infos=self.infos,
+                    warnings=self.warnings,
+                    errors=self.errors,
+                    exceptions=self.exceptions,
+                    file_results=self.file_results)
 
     def status(self) -> bool:
         """
         return true if there were no problems with jobs
         """
+        if len(self.exceptions) > 0:
+            return False
+            
         for file_result in self.file_results:
             if file_result.status() is False:
                 return False
@@ -147,6 +201,7 @@ class TranscoderResults:
         self.infos = []
         self.errors = []
         self.warnings = []
+        self.exceptions = []
         self.file_result : TrancodeFileResult = None
         self.file_results :[TrancodeFileResult] = []
 
@@ -177,6 +232,12 @@ class TranscoderResults:
         else:
             self.errors.append(message)
 
+    def exception(self, message:str):
+        """
+        add a exception message
+        """
+        self.exceptions.append(message) 
+
     def fail_on_tolerance(self, message:str):
         """
         add fail on tolerance error on file result
@@ -184,31 +245,24 @@ class TranscoderResults:
         if self.file_result:
             self.fail_on_tolerance(message)
 
+    @staticmethod
+    def to_yaml(dumper, data):
+        """
+        dump the file to yaml
+        """
+        return dumper.represent_mapping(data.YAMLTag, data.as_dict())
+
     def print_summary(self, transcoder_args=None):
         """
         print a summary of transcoder operations including infos, warnings and errors
         """
-
         stdout = sys.stdout
         if transcoder_args:
             stdout = transcoder_args.stdout
+        summary = yaml.safe_dump(self)
+        print(summary, file=stdout)
 
-        print("\nSummary:\n", file=stdout)
-
-        print("\n".join(self.infos), file=stdout)
-        print("", file=stdout)
-
-        if len(self.warnings) > 0:
-            print("Warnings:", file=stdout)
-            print("\n".join(self.warnings), file=stdout)
-            print("", file=stdout)
-
-        if len(self.errors) > 0:
-            print("Errors:", file=stdout)
-            print("\n".join(self.errors), file=stdout)
-            print("", file=stdout)
-
-
+yaml.add_representer(TranscoderResults, TranscoderResults.to_yaml, Dumper=yaml.SafeDumper)
 
 # transcoder results
 transcoder_results = TranscoderResults()
@@ -609,6 +663,11 @@ def transcode_file(source_filename, codec_name, transcode_args, output_file):
     """
     transcode a single media file
     """
+
+    # set current file result to transcoder results
+    transcoder_file_result = TrancodeFileResult(source_filename)
+    transcoder_results.set_file_result(transcoder_file_result)
+
     with transcoder_results:
         encoder_args =  transcode_args.get_encoder_args().strip().split(" ")
         encoder_args = list(filter(lambda a: a != '', encoder_args))
