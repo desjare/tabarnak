@@ -67,10 +67,8 @@ class TestBAT(TestCaseBase):
         args = ["--input-dir", TEST_BAT_INVALID_DIR]
         cmd = self.cmd + args
 
-        try:
-            result = self.run_cmd(cmd)
-        except ChildProcessError:
-            pass
+        result = self.run_cmd(cmd)
+
         self.assertEqual(result.status(), False)
 
     def test_transcode_same_codec_skip(self):
@@ -118,4 +116,4 @@ class TestBAT(TestCaseBase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main() # pragma: no cover

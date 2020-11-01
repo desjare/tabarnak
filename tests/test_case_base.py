@@ -7,7 +7,6 @@ import os
 import time
 import shutil
 import subprocess
-import sys
 import unittest
 
 from tabarnak import tabarnak

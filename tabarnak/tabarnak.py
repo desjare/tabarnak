@@ -19,7 +19,7 @@ import yaml
 
 # python 3.7 required due to subprocess
 if sys.version_info < (3,7):
-    raise Exception("Must be using Python 3.7")
+    raise Exception("Must be using Python 3.7") # pragma: no cover
 
 #
 # ffmpeg & ffprobe commands
@@ -31,10 +31,10 @@ ffmpeg_path = shutil.which("ffmpeg")
 
 # checks
 if ffmpeg_path is None:
-    raise RuntimeError("ffmpeg not found in path")
+    raise RuntimeError("ffmpeg not found in path") # pragma: no cover
 
 if ffmpeg_path is None:
-    raise RuntimeError("ffmpeg not found path")
+    raise RuntimeError("ffmpeg not found path") # pragma: no cover
 
 # probe command
 probe_cmd = [ffprobe_path, "-v", "error"]
@@ -71,9 +71,6 @@ class TranscoderFileStats:
     def __init__(self, input_file_size:int, output_file_size:int):
         self.input_file_size = input_file_size
         self.output_file_size = output_file_size
-
-    def __repr__(self):
-        return self.__class__.__name__
 
     def as_dict(self):
         """
@@ -155,8 +152,6 @@ class TranscoderStats:
 
 yaml.add_representer(TranscoderStats, TranscoderStats.to_yaml, Dumper=yaml.SafeDumper)
 
-transcoder_stats = TranscoderStats()
-
 #
 # result classes
 #
@@ -175,9 +170,6 @@ class TrancodeFileResult:
         self.warnings: [str] = []
         self.exceptions: [str] = []
         self.fails_on_tolerance: [str] = []
-
-    def __repr__(self):
-        return self.__class__.__name__
 
     def as_dict(self):
         """
@@ -255,9 +247,7 @@ class TranscoderResults:
         self.exceptions = []
         self.file_result : TrancodeFileResult = None
         self.file_results :[TrancodeFileResult] = []
-
-    def __repr__(self):
-        return self.__class__.__name__
+        self.stats = TranscoderStats()
 
     def __enter__(self):
         pass
@@ -279,6 +269,12 @@ class TranscoderResults:
         self.file_result = file_result
         self.file_results.append(file_result)
 
+    def get_transcoder_stats(self) -> TranscoderStats:
+        """
+        return global transcoder stats
+        """
+        return self.stats
+
     def as_dict(self):
         """
         return object as a dict
@@ -287,7 +283,8 @@ class TranscoderResults:
                     warnings=self.warnings,
                     errors=self.errors,
                     exceptions=self.exceptions,
-                    file_results=self.file_results)
+                    file_results=self.file_results,
+                    stats=self.stats)
 
     def status(self) -> bool:
         """
@@ -350,7 +347,7 @@ class TranscoderResults:
         add fail on tolerance error on file result
         """
         if self.file_result:
-            self.fail_on_tolerance(message)
+            self.file_result.fail_on_tolerance(message)
 
     @staticmethod
     def to_yaml(dumper, data):
@@ -579,7 +576,7 @@ def setup_logging(args):
 
             export_stats_on_root_logger()
 
-        except ImportError as error:
+        except ImportError as error: # pragma: no cover
             print("Error setting prometheus logging: %s" % (error))
             sys.exit(1)
 
@@ -690,7 +687,7 @@ def format_size(num, suffix='B'):
         if abs(num) < 1024.0:
             return "%3.1f%s%s" % (num, unit, suffix)
         num /= 1024.0
-    return "%.1f%s%s" % (num, 'Y', suffix)
+    return "%.1f%s%s" % (num, 'Y', suffix) # pragma: no cover
 
 def format_input_output(transcoder_file_stats: TranscoderFileStats):
     """
@@ -699,7 +696,7 @@ def format_input_output(transcoder_file_stats: TranscoderFileStats):
     input_fmt = format_size(transcoder_file_stats.get_input_file_size())
     output_fmt = format_size(transcoder_file_stats.get_output_file_size())
     saved_fmt = format_size(transcoder_file_stats.get_save_in_bytes())
-    total_saved_fmt = format_size(transcoder_stats.get_total_saved())
+    total_saved_fmt = format_size(transcoder_results.get_transcoder_stats().get_total_saved())
 
     return "Input Size: %s Output Size: %s Saved: %s %2.2f percent Total %s" % (input_fmt, output_fmt, saved_fmt, transcoder_file_stats.get_save_in_percent(), total_saved_fmt)
 
@@ -735,7 +732,7 @@ def compare_input_output(input_file, output_file, input_codec_name, transcode_ar
         pass
 
     transcoder_file_stats = TranscoderFileStats(input_file_size, output_file_size)
-    transcoder_stats.increment_total_saved(transcoder_file_stats.get_save_in_bytes())
+    transcoder_results.get_transcoder_stats().increment_total_saved(transcoder_file_stats.get_save_in_bytes())
 
     if transcoder_file_stats.get_save_in_percent() > transcode_args.get_percent_tolerance():
         transcoder_results.fail_on_tolerance("compare_input_output file size percent difference is too high: %2.2f for file %s  Input codec %s" % (transcoder_file_stats.get_save_in_percent(), os.path.basename(output_file), input_codec_name))
@@ -925,9 +922,9 @@ def main(argv: list = None):
 
     # exit if we are not running tests
     if transcoder_results.status() is False and argv is None:
-        sys.exit(1)
+        sys.exit(1) # pragma: no cover
 
     return transcoder_results
 
 if __name__ == "__main__":
-    main()
+    main() # pragma: no cover
