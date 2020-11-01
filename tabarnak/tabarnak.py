@@ -59,6 +59,106 @@ VIDEO_CODECS = ["hevc", "h264", "dvvideo", "mpeg4", "msmpeg4v3", "dnxhd", "vp8",
 skip_ext = [".srt", ".jpg", ".txt", ".py", ".pyc"]
 
 #
+# stats classes
+#
+
+class TranscoderFileStats:
+    """
+    transcoder file stats class
+    """
+
+    YAMLTag = u"!TranscoderFileStats"
+
+    def __init__(self, input_file_size:int, output_file_size:int):
+        self.input_file_size = input_file_size
+        self.output_file_size = output_file_size
+
+    def __repr__(self):
+        return self.__class__.__name__
+
+    def as_dict(self):
+        """
+        return object as a dict
+        """
+        return dict(input_file_size=self.input_file_size,
+                    output_file_size=self.output_file_size,
+                    save_in_bytes=self.get_save_in_bytes(),
+                    save_in_percent=self.get_save_in_percent())
+
+    def get_input_file_size(self) -> int:
+        """
+        return the input file size in bytes
+        """
+        return self.input_file_size
+
+    def get_output_file_size(self) -> int:
+        """
+        return the output file size in bytes
+        """
+        return self.output_file_size
+
+    def get_save_in_bytes(self) -> float:
+        """
+        return the saved in bytes
+        """
+        return self.input_file_size - self.output_file_size
+
+    def get_save_in_percent(self) -> float:
+        """
+        return the saved space in percent
+        """
+        return (1. - float(self.output_file_size) / float(self.input_file_size)) * 100.
+
+    @staticmethod
+    def to_yaml(dumper, data):
+        """
+        dump the file to yaml
+        """
+        return dumper.represent_mapping(data.YAMLTag, data.as_dict())
+
+yaml.add_representer(TranscoderFileStats, TranscoderFileStats.to_yaml, Dumper=yaml.SafeDumper)
+
+class TranscoderStats:
+    """
+    transcoder Stats class
+    """
+
+    YAMLTag = u"!TranscoderStats"
+
+    def __init__(self):
+        # define collected stats
+        self.total_saved = 0.0
+
+    def increment_total_saved(self, value):
+        """
+        increment total saved value in bytes
+        """
+        self.total_saved += value
+
+    def get_total_saved(self):
+        """
+        fetch total saved bytes
+        """
+        return self.total_saved
+
+    def as_dict(self):
+        """
+        return object as a dict
+        """
+        return dict(total_saved=self.total_saved)
+
+    @staticmethod
+    def to_yaml(dumper, data):
+        """
+        dump the file to yaml
+        """
+        return dumper.represent_mapping(data.YAMLTag, data.as_dict())
+
+yaml.add_representer(TranscoderStats, TranscoderStats.to_yaml, Dumper=yaml.SafeDumper)
+
+transcoder_stats = TranscoderStats()
+
+#
 # result classes
 #
 class TrancodeFileResult:
@@ -70,6 +170,7 @@ class TrancodeFileResult:
 
     def __init__(self, path):
         self.path = path
+        self.transcoder_file_stats : TranscoderFileStats = None
         self.infos: [str]= []
         self.errors: [str] = []
         self.warnings: [str] = []
@@ -84,11 +185,18 @@ class TrancodeFileResult:
         return object as a dict
         """
         return dict(path=self.path,
+                    stats=self.transcoder_file_stats,
                     infos=self.infos,
                     warnings=self.warnings,
                     errors=self.errors,
                     exception=self.exceptions,
                     fails_on_tolerance=self.fails_on_tolerance)
+
+    def set_file_stats(self,transcoder_file_stats: TranscoderFileStats):
+        """
+        set stats for file transcoding
+        """
+        self.transcoder_file_stats = transcoder_file_stats
 
     def status(self) -> bool:
         """
@@ -188,7 +296,7 @@ class TranscoderResults:
         """
         if len(self.exceptions) > 0:
             return False
-            
+
         for file_result in self.file_results:
             if file_result.status() is False:
                 return False
@@ -236,7 +344,7 @@ class TranscoderResults:
         """
         add a exception message
         """
-        self.exceptions.append(message) 
+        self.exceptions.append(message)
 
     def fail_on_tolerance(self, message:str):
         """
@@ -427,27 +535,7 @@ class TranscoderArgs:
         """
         return self.args.percent_tolerance
 
-class TranscoderStats:
-    """
-    transcoder Stats class
-    """
-    def __init__(self):
-        # define collected stats
-        self.total_saved = 0.0
 
-    def increment_total_saved(self, value):
-        """
-        increment total saved value in bytes
-        """
-        self.total_saved += value
-
-    def get_total_saved(self):
-        """
-        fetch total saved bytes
-        """
-        return self.total_saved
-
-transcoder_stats = TranscoderStats()
 
 def setup_logging(args):
     """
@@ -605,16 +693,16 @@ def format_size(num, suffix='B'):
         num /= 1024.0
     return "%.1f%s%s" % (num, 'Y', suffix)
 
-def format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved):
+def format_input_output(transcoder_file_stats: TranscoderFileStats):
     """
     format input and output size and stats for logging
     """
-    input_fmt = format_size(input_file_size)
-    output_fmt = format_size(output_file_size)
-    saved_fmt = format_size(saved)
-    total_saved_fmt = format_size(total_saved)
+    input_fmt = format_size(transcoder_file_stats.get_input_file_size())
+    output_fmt = format_size(transcoder_file_stats.get_output_file_size())
+    saved_fmt = format_size(transcoder_file_stats.get_save_in_bytes())
+    total_saved_fmt = format_size(transcoder_stats.get_total_saved())
 
-    return "Input Size: %s Output Size: %s Saved: %s %2.2f percent Total %s" % (input_fmt, output_fmt, saved_fmt, saved_percent, total_saved_fmt)
+    return "Input Size: %s Output Size: %s Saved: %s %2.2f percent Total %s" % (input_fmt, output_fmt, saved_fmt, transcoder_file_stats.get_save_in_percent(), total_saved_fmt)
 
 
 def compare_input_output(input_file, output_file, input_codec_name, transcode_args):
@@ -647,17 +735,15 @@ def compare_input_output(input_file, output_file, input_codec_name, transcode_ar
     except FileNotFoundError:
         pass
 
+    transcoder_file_stats = TranscoderFileStats(input_file_size, output_file_size)
+    transcoder_stats.increment_total_saved(transcoder_file_stats.get_save_in_bytes())
 
-    saved = input_file_size - output_file_size
-    saved_percent = (1. - float(output_file_size) / float(input_file_size)) * 100.
-    transcoder_stats.increment_total_saved(saved)
-
-    if saved_percent > transcode_args.get_percent_tolerance():
-        transcoder_results.fail_on_tolerance("compare_input_output file size percent difference is too high: %2.2f for file %s  Input codec %s" % (saved_percent, os.path.basename(output_file), input_codec_name))
+    if transcoder_file_stats.get_save_in_percent() > transcode_args.get_percent_tolerance():
+        transcoder_results.fail_on_tolerance("compare_input_output file size percent difference is too high: %2.2f for file %s  Input codec %s" % (transcoder_file_stats.get_save_in_percent(), os.path.basename(output_file), input_codec_name))
         logging.warning("compare_input_output file size percent difference is too high: %2.2f for file %s  Input codec %s",
-                        saved_percent, os.path.basename(output_file), input_codec_name)
+                        transcoder_file_stats.get_save_in_percent(), os.path.basename(output_file), input_codec_name)
 
-    return (input_file_size, output_file_size, saved, saved_percent, transcoder_stats.get_total_saved())
+    return transcoder_file_stats
 
 def transcode_file(source_filename, codec_name, transcode_args, output_file):
     """
@@ -694,8 +780,10 @@ def transcode_file(source_filename, codec_name, transcode_args, output_file):
             remove_file(output_file)
             raise RuntimeError("transcode_file error running %s: zero duration for %s" % (cmd, output_file))
 
-        input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename, output_file, codec_name, transcode_args)
-        job_stats_string = format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved)
+        transcoder_file_stats = compare_input_output(source_filename, output_file, codec_name, transcode_args)
+        transcoder_file_result.set_file_stats(transcoder_file_stats)
+
+        job_stats_string = format_input_output(transcoder_file_stats)
 
         transcoder_results.info("transcode_file job done: %s %s" % (output_file, job_stats_string))
         logging.info("transcode_file job done: %s %s", output_file, job_stats_string)
@@ -732,9 +820,9 @@ def transcode(transcode_args, copy_others):
 
             if os.path.exists(output_file) is True:
 
-                input_file_size, output_file_size, saved, saved_percent, total_saved = compare_input_output(source_filename,output_file, codec_name, transcode_args)
+                transcoder_file_stats = compare_input_output(source_filename,output_file, codec_name, transcode_args)
 
-                logging.info("Skipping %s exists. %s", output_file, format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved))
+                logging.info("Skipping %s exists. %s", output_file, format_input_output(transcoder_file_stats))
                 continue
 
             transcode_file(source_filename, codec_name, transcode_args, output_file)
