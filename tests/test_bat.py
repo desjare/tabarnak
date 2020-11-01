@@ -8,7 +8,7 @@ import subprocess
 import unittest
 
 from tests.test_case_base import TestCaseBase
-from tests.config import TEST_BAT_H264_DIR, TEST_BAT_INVALID_DIR
+from tests.config import TEST_BAT_DIR, TEST_BAT_H264_DIR, TEST_BAT_INVALID_DIR
 from tests.config import TEST_H264_FILE_2_SECONDS, TEST_H264_PATH_2_SECONDS
 
 from tabarnak import tabarnak
@@ -112,6 +112,18 @@ class TestBAT(TestCaseBase):
         results = subprocess.run(["kill", "-SIGUSR1", str(os.getpid())], check=False)
 
         self.assertTrue(results.returncode == 0)
+
+    def test_keep_relative_path(self):
+        """
+        transcode the entire BAT folder by keeping relative path
+        """
+        args = ["--input-dir", TEST_BAT_DIR, "--keep-relative-path"]
+        cmd = self.cmd + args
+
+        result = self.run_cmd(cmd)
+
+        self.assertEqual(result.status(), False) # invalid dir will cause status to fail
+        self.assert_count_sub_dir(self.output_dir, 3)
 
 
 

@@ -5,9 +5,11 @@ tabarnak - transcode all basically accessible resolutely not all Klingon transco
 # pylint: disable=line-too-long
 # pylint: disable=import-outside-toplevel
 # pylint: disable=too-many-locals
+# pylint: disable=too-many-instance-attributes
 
 
 import argparse
+import datetime
 import logging
 import math
 import os
@@ -248,6 +250,7 @@ class TranscoderResults:
         self.file_result : TrancodeFileResult = None
         self.file_results :[TrancodeFileResult] = []
         self.stats = TranscoderStats()
+        self.start_time = datetime.datetime.now()
 
     def __enter__(self):
         pass
@@ -284,7 +287,11 @@ class TranscoderResults:
                     errors=self.errors,
                     exceptions=self.exceptions,
                     file_results=self.file_results,
-                    stats=self.stats)
+                    stats=self.stats,
+                    status=self.status(),
+                    start_time=self.start_time,
+                    end_time=datetime.datetime.now(),
+                    elapsed_time = str(datetime.datetime.now() - self.start_time))
 
     def status(self) -> bool:
         """
@@ -450,6 +457,7 @@ class TranscoderInputOutputArgs:
         self.input_dir = args.input_dir
         self.output_dir = args.output_dir
         self.output_suffix = args.output_suffix
+        self.keep_relative_path = args.keep_relative_path
 
     def get_input_dir(self) -> str:
         """
@@ -457,10 +465,14 @@ class TranscoderInputOutputArgs:
         """
         return self.input_dir
 
-    def get_output_dir(self) -> str:
+    def get_output_dir(self, input_dir:str, root_path:str) -> str:
         """
         return output directory
         """
+        if self.keep_relative_path is True:
+            rel_path = os.path.relpath(root_path, input_dir)
+            output_dir = os.path.join(self.output_dir, rel_path)
+            return output_dir
         return self.output_dir
 
     def get_output_suffix(self) -> str:
@@ -489,11 +501,11 @@ class TranscoderArgs:
         """
         return self.input_output_args.get_input_dir()
 
-    def get_output_dir(self) -> str:
+    def get_output_dir(self, input_dir:str, root_path:str) -> str:
         """
         return transcoder output dir
         """
-        return self.input_output_args.get_output_dir()
+        return self.input_output_args.get_output_dir(input_dir, root_path)
 
     def get_output_suffix(self) -> str:
         """
@@ -789,9 +801,17 @@ def transcode(transcode_args, copy_others):
     """
     walk into a directory and transcode all media file to specified parameters
     """
-    for root, _, files in os.walk(transcode_args.get_input_dir(), topdown=False):
+    input_dir = transcode_args.get_input_dir()
+    for root, _, files in os.walk(input_dir, topdown=False):
         for name in files:
+            # skip hidden files
+            if name.startswith("."):
+                continue
+
             source_filename = os.path.join(root,name).replace("./","")
+            output_dir = transcode_args.get_output_dir(input_dir, root)
+
+            os.makedirs(output_dir, exist_ok=True)
 
             codec_name = ""
             with transcoder_results:
@@ -802,7 +822,7 @@ def transcode(transcode_args, copy_others):
                 logging.debug("Skipping %s codec \"%s\"", name, codec_name)
 
                 if copy_others is True:
-                    dest_filename = os.path.join(transcode_args.get_output_dir(), os.path.basename(source_filename))
+                    dest_filename = os.path.join(output_dir, os.path.basename(source_filename))
                     if os.path.exists(dest_filename) is False:
                         logging.info("Copying %s", dest_filename)
                         shutil.copyfile(source_filename, dest_filename)
@@ -812,7 +832,7 @@ def transcode(transcode_args, copy_others):
             output_filename, _ = os.path.splitext(source_filename)
             output_filename += transcode_args.get_output_suffix() + transcode_args.get_container_ext()
 
-            output_file = os.path.join(transcode_args.get_output_dir(), os.path.basename(output_filename))
+            output_file = os.path.join(output_dir, os.path.basename(output_filename))
 
             if os.path.exists(output_file) is True:
 
@@ -838,6 +858,7 @@ def parse_args(argv):
 
     io_group.add_argument("--input-dir", type=str, default=".", dest="input_dir", help="directory where your media files are found")
     io_group.add_argument("--output-dir", type=str, default=".", dest="output_dir", help="directory where your media files are outputted")
+    io_group.add_argument("--keep-relative-path", default=False, action="store_true", dest="keep_relative_path", help="keep relative directory structure")
     io_group.add_argument("--output-suffix", type=str, default="", dest="output_suffix", help="suffix to add to the output file")
     io_group.add_argument("--stdout-path", type=str, default=None, dest="stdout_path", help="redirect stdout to path")
     io_group.add_argument("--stderr-path", type=str, default=None, dest="stderr_path", help="redirect stderr to path")
@@ -856,7 +877,7 @@ def parse_args(argv):
 
     # error
     error_group = parser.add_argument_group('error options')
-    error_group.add_argument("--duration-tolerance", type=int, default=30, dest="duration_diff_tolerance_in_frames", help="duration difference in frames that is tolerated")
+    error_group.add_argument("--duration-tolerance", type=int, default=1, dest="duration_diff_tolerance_in_frames", help="duration difference in frames that is tolerated")
     error_group.add_argument("--percent-tolerance", type=int, default=95, dest="percent_tolerance", help="percent difference that is tolerated")
 
     # encoding

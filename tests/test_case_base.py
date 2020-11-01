@@ -148,6 +148,16 @@ class TestCaseBase(unittest.TestCase):
             self.assertGreaterEqual(non_media_files, count)
             self.assertGreaterEqual(media_files, count)
 
+    def assert_count_sub_dir(self, output_dir, count):
+        """
+        assert that number of subdir is greater than count
+        """
+        num_sub_dirs = 0
+        for _, dirs, _ in os.walk(output_dir, topdown=False):
+            num_sub_dirs += len(dirs)
+
+        self.assertGreaterEqual(num_sub_dirs, count)
+
     def list_to_reason(self, exc_list):
         """
         extract a reason from a test result errors or failures list
