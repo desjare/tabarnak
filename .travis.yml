@@ -18,7 +18,7 @@ install:
 
 # command to run tests
 script:
-    - coverage run pytest
+    - coverage run --source tabarnak,tests -m pytest
 after_success:
     - coverage xml
     - codecov
