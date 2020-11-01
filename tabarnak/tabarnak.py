@@ -61,7 +61,6 @@ skip_ext = [".srt", ".jpg", ".txt", ".py", ".pyc"]
 #
 # stats classes
 #
-
 class TranscoderFileStats:
     """
     transcoder file stats class
