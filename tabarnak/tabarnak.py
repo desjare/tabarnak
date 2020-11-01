@@ -70,12 +70,13 @@ class TrancodeFileResult:
         self.errors: [str] = []
         self.warnings: [str] = []
         self.exceptions: [str] = []
+        self.fails_on_tolerance: [str] = []
 
     def status(self) -> bool:
         """
         return True if the trancode has been successful
         """
-        return len(self.exceptions) == 0
+        return len(self.exceptions) == 0 and len(self.fails_on_tolerance) ==0
 
     def info(self,message:str):
         """
@@ -100,6 +101,12 @@ class TrancodeFileResult:
         add a exception message
         """
         self.exceptions.append(message)
+
+    def fail_on_tolerance(self, message:str):
+        """
+        add a fail on tolerance error
+        """
+        self.fails_on_tolerance.append(message)
 
 class TranscoderResults:
     """
@@ -133,6 +140,16 @@ class TranscoderResults:
                 return False
         return True
 
+    def reset(self):
+        """
+        reset results to initial state
+        """
+        self.infos = []
+        self.errors = []
+        self.warnings = []
+        self.file_result : TrancodeFileResult = None
+        self.file_results :[TrancodeFileResult] = []
+
     def info(self,message:str):
         """
         add an information message in context
@@ -159,6 +176,13 @@ class TranscoderResults:
             self.file_result.error(message)
         else:
             self.errors.append(message)
+
+    def fail_on_tolerance(self, message:str):
+        """
+        add fail on tolerance error on file result
+        """
+        if self.file_result:
+            self.fail_on_tolerance(message)
 
     def print_summary(self, transcoder_args=None):
         """
@@ -445,6 +469,17 @@ def close_logging(args):
         from prometheus_client import REGISTRY, write_to_textfile
         write_to_textfile('transcode.prom', REGISTRY)
 
+def signal_handler(signal_number, _):
+    """
+    signal handler for the transcoder
+    """
+    logging.error("Interupted %d", signal_number)
+    transcoder_results.print_summary()
+
+    # SIGUSR1 is used in tests
+    if signal_number != signal.SIGUSR1:
+        sys.exit(1)
+
 def remove_file(output_file):
     """
     remove a file and ignore exception
@@ -456,37 +491,6 @@ def remove_file(output_file):
     except IsADirectoryError as error:
         logging.error("Cannot remove %s:%s", output_file, error)
 
-def format_size(num, suffix='B'):
-    """
-    format num bytes to a readable human format
-    """
-    for unit in ['','K','M','G','T','P','E','Z']:
-        if abs(num) < 1024.0:
-            return "%3.1f%s%s" % (num, unit, suffix)
-        num /= 1024.0
-    return "%.1f%s%s" % (num, 'Y', suffix)
-
-def format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved):
-    """
-    format input and output size and stats for logging
-    """
-    input_fmt = format_size(input_file_size)
-    output_fmt = format_size(output_file_size)
-    saved_fmt = format_size(saved)
-    total_saved_fmt = format_size(total_saved)
-
-    return "Input Size: %s Output Size: %s Saved: %s %2.2f percent Total %s" % (input_fmt, output_fmt, saved_fmt, saved_percent, total_saved_fmt)
-
-def signal_handler(signal_number, _):
-    """
-    signal handler for the transcoder
-    """
-    logging.error("Interupted %d", signal_number)
-    transcoder_results.print_summary()
-
-    # SIGUSR1 is used in tests
-    if signal_number != signal.SIGUSR1:
-        sys.exit(1)
 
 def fetch_codec_name(path):
     """
@@ -501,16 +505,13 @@ def fetch_codec_name(path):
 
     results = subprocess.run(check_output_cmd, stdout=subprocess.PIPE, check=False)
     if results.returncode != 0:
-        transcoder_results.error("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
-        logging.error("Cannot run ffprobe on %s error: %d", path, results.returncode)
-        return ""
+        raise RuntimeError("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
     codec = results.stdout.decode('utf-8').replace("\n","")
 
     if codec == "" or codec not in VIDEO_CODECS:
         transcoder_results.error("Invalid codec \"%s\" for %s" % (codec, path))
         logging.error("Invalid codec \"%s\" for %s", codec, path)
         return ""
-
     return codec
 
 def fetch_duration_in_frames(path):
@@ -540,6 +541,28 @@ def fetch_duration_in_frames(path):
 
     return int(frame_duration)
 
+def format_size(num, suffix='B'):
+    """
+    format num bytes to a readable human format
+    """
+    for unit in ['','K','M','G','T','P','E','Z']:
+        if abs(num) < 1024.0:
+            return "%3.1f%s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f%s%s" % (num, 'Y', suffix)
+
+def format_input_output(input_file_size, output_file_size, saved, saved_percent, total_saved):
+    """
+    format input and output size and stats for logging
+    """
+    input_fmt = format_size(input_file_size)
+    output_fmt = format_size(output_file_size)
+    saved_fmt = format_size(saved)
+    total_saved_fmt = format_size(total_saved)
+
+    return "Input Size: %s Output Size: %s Saved: %s %2.2f percent Total %s" % (input_fmt, output_fmt, saved_fmt, saved_percent, total_saved_fmt)
+
+
 def compare_input_output(input_file, output_file, input_codec_name, transcode_args):
     """
     compare an input media file to its output media file and returns a tuple of comparison stats
@@ -554,7 +577,7 @@ def compare_input_output(input_file, output_file, input_codec_name, transcode_ar
     duration_diff = abs(input_duration - output_duration)
     if duration_diff > transcode_args.get_diff_tolerance_in_frames():
         delta_in_frames = output_duration - input_duration
-        transcoder_results.error("compare_input_output duration differs input: %s:%d frames output %s:%d frames out duration - in duration:%d frames" % (input_name, input_duration, output_name, output_duration, delta_in_frames))
+        transcoder_results.fail_on_tolerance("compare_input_output duration differs input: %s:%d frames output %s:%d frames out duration - in duration:%d frames" % (input_name, input_duration, output_name, output_duration, delta_in_frames))
         logging.error("compare_input_output duration differs input: %s:%d frames output %s:%d frames out duration - in duration:%d frames",
                         input_name, input_duration, output_name, output_duration, delta_in_frames )
 
@@ -576,7 +599,7 @@ def compare_input_output(input_file, output_file, input_codec_name, transcode_ar
     transcoder_stats.increment_total_saved(saved)
 
     if saved_percent > transcode_args.get_percent_tolerance():
-        transcoder_results.warning("compare_input_output file size percent difference is too high: %2.2f for file %s  Input codec %s" % (saved_percent, os.path.basename(output_file), input_codec_name))
+        transcoder_results.fail_on_tolerance("compare_input_output file size percent difference is too high: %2.2f for file %s  Input codec %s" % (saved_percent, os.path.basename(output_file), input_codec_name))
         logging.warning("compare_input_output file size percent difference is too high: %2.2f for file %s  Input codec %s",
                         saved_percent, os.path.basename(output_file), input_codec_name)
 
@@ -627,7 +650,10 @@ def transcode(transcode_args, copy_others):
         for name in files:
             source_filename = os.path.join(root,name).replace("./","")
 
-            codec_name = fetch_codec_name(source_filename)
+            codec_name = ""
+            with transcoder_results:
+                codec_name = fetch_codec_name(source_filename)
+
             if codec_name in transcode_args.get_output_video_codec():
 
                 logging.debug("Skipping %s codec \"%s\"", name, codec_name)
@@ -640,11 +666,8 @@ def transcode(transcode_args, copy_others):
 
                 continue
 
-            output_filename, ext = os.path.splitext(source_filename)
+            output_filename, _ = os.path.splitext(source_filename)
             output_filename += transcode_args.get_output_suffix() + transcode_args.get_container_ext()
-
-            if ext.lower() in skip_ext:
-                continue
 
             output_file = os.path.join(transcode_args.get_output_dir(), os.path.basename(output_filename))
 
@@ -724,8 +747,11 @@ def main(argv: list = None):
     """
     main function: argv is used for tests
     """
-
     args = parse_args(argv)
+
+    # reset results
+    transcoder_results.reset()
+
     setup_logging(args)
 
     # setup signal interupt handler

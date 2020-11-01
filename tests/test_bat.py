@@ -25,8 +25,9 @@ class TestBAT(TestCaseBase):
         Basic encoding test using BAT directory as source
         """
         cmd = self.cmd + ["--input-dir", TEST_BAT_H264_DIR, "--copy"]
-        self.run_cmd(cmd)
+        result = self.run_cmd(cmd)
 
+        self.assertEqual(result.status(), True)
         self.assert_codec_name(self.output_dir, "hevc")
         self.assert_copy(self.output_dir, 1)
 
@@ -39,8 +40,9 @@ class TestBAT(TestCaseBase):
         cmd += ["--encoder-args", "-c:v libx265 -crf 20"]
         cmd += ["--duration-tolerance", 0]
         cmd += ["--percent-tolerance", 0]
-        self.run_cmd(cmd)
+        result = self.run_cmd(cmd)
 
+        self.assertEqual(result.status(), True)
         self.assert_codec_name(self.output_dir, "hevc")
 
     def test_basic_failure(self):
@@ -50,10 +52,13 @@ class TestBAT(TestCaseBase):
         args = ["--input-dir", TEST_BAT_H264_DIR, "--invalid-args"]
         cmd = self.cmd + args
 
+        child_process_error = False
         try:
             self.run_cmd(cmd)
         except ChildProcessError:
-            pass
+            child_process_error = True
+
+        self.assertEqual(child_process_error, True)
 
     def test_basic_failure_invalid_input(self):
         """
@@ -63,9 +68,10 @@ class TestBAT(TestCaseBase):
         cmd = self.cmd + args
 
         try:
-            self.run_cmd(cmd)
+            result = self.run_cmd(cmd)
         except ChildProcessError:
             pass
+        self.assertEqual(result.status(), False)
 
     def test_transcode_same_codec_skip(self):
         """
@@ -95,8 +101,9 @@ class TestBAT(TestCaseBase):
 
         cmd = self.cmd + ["--input-dir", TEST_BAT_H264_DIR]
         cmd += ["--use-prometheus-logging", "--prometheus-log-path", prometheus_log_path]
-        self.run_cmd(cmd)
+        result = self.run_cmd(cmd)
 
+        self.assertEqual(result.status(), True)
         self.assert_codec_name(self.output_dir, "hevc")
 
     def test_signal_handler(self):
