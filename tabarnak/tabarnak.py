@@ -1039,6 +1039,7 @@ def main(argv: list = None):
     if args.output_dir is not None:
         os.makedirs(args.output_dir, exist_ok=True)
 
+    # execute the transcoding tasks
     if args.stdout_path is not None and args.stderr_path is not None:
         with open(args.stdout_path, "w+") as cmd_stdout, open(args.stderr_path, "w+") as cmd_stderr:
             execute(args, cmd_stdout, cmd_stderr)
