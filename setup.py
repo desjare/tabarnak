@@ -8,7 +8,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="tabarnak-desjare",  # Replace with your own username
-    version="0.0.4",
+    version="0.0.5",
     author="Eric Desjardins",
     author_email="desjare@gmail.com",
     description="transcoder FFmpeg based wrapper",
@@ -16,6 +16,9 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/desjare/tabarnak",
     packages=setuptools.find_packages(),
+    install_requires=[
+          "PyYAML",
+    ],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",

@@ -43,9 +43,12 @@ if ffmpeg_path is None:
 probe_cmd = [ffprobe_path, "-v", "error"]
 probe_of = ["-of" , "default=noprint_wrappers=1:nokey=1"]
 probe_vstream = ["-select_streams",  "v:0"]
+probe_astream = ["-select_streams",  "a:0"]
 
 # fetch codec name command
-probe_codec_cmd = probe_cmd + probe_vstream + ["-show_entries", "stream=codec_name"] + probe_of
+probe_video_codec_cmd = probe_cmd + probe_vstream + ["-show_entries", "stream=codec_name"] + probe_of
+probe_audio_codec_cmd = probe_cmd + probe_astream + ["-show_entries", "stream=codec_name"] + probe_of
+
 
 # fetch duration in frames
 probe_duration_cmd = probe_cmd + ["-show_entries", "format=duration"] + probe_of
@@ -56,7 +59,7 @@ probe_duration_cmd = probe_cmd + ["-show_entries", "format=duration"] + probe_of
 
 # codec & configurations
 VIDEO_CODECS = ["hevc", "h264", "dvvideo", "mpeg4", "msmpeg4v3", "dnxhd", "vp8", "vp9"]
-
+AUDIO_CODECS = ["aac", "mp3", "alac", "vorbis", "opus", "flac", "pcm_s16le"]
 
 # extensions to ignore
 skip_ext = [".srt", ".jpg", ".txt", ".py", ".pyc"]
@@ -421,35 +424,45 @@ DEFAULT_VP9_VIDEO_CONFIG = {
     }
 }
 
+
+DEFAULT_OPUS_AUDIO_CONFIG = {
+    "default_ext": ".ogg",
+    "encoder_args" : {
+        "-c:a": "libopus",
+    }
+}
+
+
 class TranscoderConfiguration:
     """
     transcoder configuration
     """
     YAMLTag = "!TranscoderConfiguration"
 
-    def __init__(self, video_configs:dict = None):
+    def __init__(self, configs:dict = None):
         # use default config if none specified
-        if video_configs is None:
-            self.video_configs = {
+        if configs is None:
+            self.configs = {
                 "h264": DEFAULT_H264_VIDEO_CONFIG,
                 "hevc" : DEFAULT_HEVC_VIDEO_CONFIG,
                 "av1" : DEFAULT_AV1_VIDEO_CONFIG,
-                "vp9" : DEFAULT_VP9_VIDEO_CONFIG
+                "vp9" : DEFAULT_VP9_VIDEO_CONFIG,
+                "opus" : DEFAULT_OPUS_AUDIO_CONFIG
             }
         else:
-            self.video_configs = video_configs
+            self.configs = configs
 
     def get_container_ext(self, config_name:str) -> str:
         """
         return container extension based on config name
         """
-        return self.video_configs.get(config_name).get("default_ext")
+        return self.configs.get(config_name).get("default_ext")
 
     def get_encoder_args(self, config_name:str) -> str:
         """
         return encoder args based on config name
         """
-        video_config_encoder_args = self.video_configs.get(config_name).get("encoder_args")
+        video_config_encoder_args = self.configs.get(config_name).get("encoder_args")
         encoder_args = ""
         for key, value in video_config_encoder_args.items():
             encoder_args += key + " " + value + " "
@@ -459,13 +472,13 @@ class TranscoderConfiguration:
         """
         return object as a dict
         """
-        return dict(video_configs=self.video_configs)
+        return dict(configs=self.configs)
 
     def from_dict(self, config_dict:dict):
         """
         override config from dict
         """
-        self.video_configs = config_dict["video_configs"]
+        self.configs = config_dict["configs"]
 
     @staticmethod
     def to_yaml(dumper, data):
@@ -480,7 +493,7 @@ class TranscoderConfiguration:
         build a TranscoderConfiguration from a yml loader and node
         """
         node_map = loader.construct_mapping(node)
-        return TranscoderConfiguration(video_configs=node_map["video_configs"])
+        return TranscoderConfiguration(configs=node_map["configs"])
 
 yaml.add_representer(TranscoderConfiguration, TranscoderConfiguration.to_yaml, Dumper=yaml.SafeDumper)
 yaml.add_constructor(TranscoderConfiguration.YAMLTag, TranscoderConfiguration.from_yaml, Loader=yaml.SafeLoader)
@@ -491,7 +504,7 @@ class TranscoderEncoderArgs:
     """
     def __init__(self, args: dict, config: TranscoderConfiguration):
         self.encoder_args = ""
-        self.output_video_codec = "hevc"
+        self.output_main_codec = "hevc"
 
         if args.map_args is not None:
             self.encoder_args += args.map_args
@@ -501,19 +514,19 @@ class TranscoderEncoderArgs:
         if args.strip_metadata is True:
             self.encoder_args += " -map_metadata -1 "
 
-        if args.video_config_name is not None:
-            self.encoder_args += config.get_encoder_args(args.video_config_name)
-            self.output_video_codec = args.video_config_name
+        if args.config_name is not None:
+            self.encoder_args += config.get_encoder_args(args.config_name)
+            self.output_main_codec = args.config_name
         elif args.encoder_args is not None:
             self.encoder_args += args.encoder_args
         else:
-            self.encoder_args += config.get_encoder_args(self.output_video_codec)
+            self.encoder_args += config.get_encoder_args(self.output_main_codec)
 
-    def get_output_video_codec(self):
+    def get_output_main_codec(self):
         """
         return output video code name
         """
-        return self.output_video_codec
+        return self.output_main_codec
 
     def get_args(self):
         """
@@ -585,17 +598,17 @@ class TranscoderArgs:
         """
         return self.input_output_args.get_output_suffix()
 
-    def get_output_video_codec(self):
+    def get_output_main_codec(self):
         """
         return output video codec name from encoder args
         """
-        return self.encoder_args.get_output_video_codec()
+        return self.encoder_args.get_output_main_codec()
 
     def get_container_ext(self):
         """
         return container extension based on transcoder args
         """
-        return self.config.get_container_ext(self.get_output_video_codec())
+        return self.config.get_container_ext(self.get_output_main_codec())
 
     def get_encoder_args(self):
         """
@@ -713,6 +726,19 @@ def remove_file(output_file):
     except IsADirectoryError as error:
         logging.error("Cannot remove %s:%s", output_file, error)
 
+def fetch_codec_name_with_fprobe(path:str, args:list) -> str:
+    """
+    fetch codec name using fprobe argument list
+    """
+    check_output_cmd = args.copy()
+    check_output_cmd += [path]
+
+    results = subprocess.run(check_output_cmd, stdout=subprocess.PIPE, check=False)
+    if results.returncode != 0:
+        raise RuntimeError("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
+    codec = results.stdout.decode('utf-8').replace("\n","")
+
+    return codec
 
 def fetch_codec_name(path):
     """
@@ -722,19 +748,21 @@ def fetch_codec_name(path):
     if ext in skip_ext:
         return ""
 
-    check_output_cmd = probe_codec_cmd.copy()
-    check_output_cmd += [path]
+    video_codec = fetch_codec_name_with_fprobe(path, probe_video_codec_cmd)
+    audio_codec = fetch_codec_name_with_fprobe(path, probe_audio_codec_cmd)
 
-    results = subprocess.run(check_output_cmd, stdout=subprocess.PIPE, check=False)
-    if results.returncode != 0:
-        raise RuntimeError("Cannot run ffprobe on %s error: %d" % (path, results.returncode))
-    codec = results.stdout.decode('utf-8').replace("\n","")
+    valid_video_codec = video_codec in VIDEO_CODECS
+    valid_audio_codec = audio_codec in AUDIO_CODECS
 
-    if codec == "" or codec not in VIDEO_CODECS:
-        transcoder_results.error("Invalid codec \"%s\" for %s" % (codec, path))
-        logging.error("Invalid codec \"%s\" for %s", codec, path)
+    if not valid_audio_codec and not valid_audio_codec:
+        transcoder_results.error("Invalid codec video \"%s\" audio \"%s\" for %s" % (video_codec, audio_codec, path))
+        logging.error("Invalid video codec \"%s\" audio codec \"%s\" for %s", video_codec, audio_codec, path)
         return ""
-    return codec
+
+    if valid_video_codec:
+        return video_codec
+
+    return audio_codec
 
 def fetch_duration_in_frames(path):
     """
@@ -889,7 +917,7 @@ def transcode(transcode_args, copy_others):
             with transcoder_results:
                 codec_name = fetch_codec_name(source_filename)
 
-            if codec_name in transcode_args.get_output_video_codec():
+            if codec_name in transcode_args.get_output_main_codec():
 
                 logging.debug("Skipping %s codec \"%s\"", name, codec_name)
 
@@ -964,11 +992,12 @@ def parse_args(argv):
     endoding_group = parser.add_argument_group('encoding options')
     endoding_group.add_argument("--encoder-args", type=str, default=None, dest="encoder_args", help="override default encoder args")
 
-    video_config_group = endoding_group.add_mutually_exclusive_group()
-    video_config_group.add_argument("--h264", action="store_const", const="h264", dest="video_config_name", help="specify h264 codec")
-    video_config_group.add_argument("--hevc", action="store_const", const="hevc", dest="video_config_name", help="specify hevc codec")
-    video_config_group.add_argument("--av1", action="store_const", const="av1", dest="video_config_name", help="specify av1 codec")
-    video_config_group.add_argument("--vp9", action="store_const", const="vp9", dest="video_config_name", help="specify vp9 codec")
+    config_group = endoding_group.add_mutually_exclusive_group()
+    config_group.add_argument("--h264", action="store_const", const="h264", dest="config_name", help="specify h264 codec")
+    config_group.add_argument("--hevc", action="store_const", const="hevc", dest="config_name", help="specify hevc codec")
+    config_group.add_argument("--av1", action="store_const", const="av1", dest="config_name", help="specify av1 codec")
+    config_group.add_argument("--vp9", action="store_const", const="vp9", dest="config_name", help="specify vp9 codec")
+    config_group.add_argument("--opus", action="store_const", const="opus", dest="config_name", help="specify opus codec")
 
     if argv is not None:
         def error(message):
