@@ -6,10 +6,11 @@ tabarnak - transcode all basically accessible resolutely not all Klingon transco
 # pylint: disable=import-outside-toplevel
 # pylint: disable=too-many-locals
 # pylint: disable=too-many-instance-attributes
-
+# pylint: disable=too-many-lines
 
 import argparse
 import datetime
+import json
 import logging
 import math
 import os
@@ -381,43 +382,114 @@ transcoder_results = TranscoderResults()
 #
 # configuration class
 #
-class TranscoderConfig:
+DEFAULT_H264_VIDEO_CONFIG = {
+    "default_ext": ".mkv",
+    "encoder_args" : {
+        "-c:v": "libx264",
+        "-crf": "30"
+    }
+}
+
+DEFAULT_HEVC_VIDEO_CONFIG = {
+    "default_ext": ".mkv",
+    "encoder_args" : {
+        "-c:v": "libx265",
+        "-crf": "28",
+        "-preset": "medium"
+    }
+}
+
+DEFAULT_AV1_VIDEO_CONFIG = {
+    "default_ext": ".mkv",
+    "encoder_args" : {
+        "-c:v": "libaom-av1",
+        "-crf": "30",
+        "-b:v": "2000k",
+        "-strict": "experimental",
+        "-row-mt": "1",
+        "-tile-columns": "4",
+        "-tile-rows": ""
+    }
+}
+
+DEFAULT_VP9_VIDEO_CONFIG = {
+    "default_ext": ".webm",
+    "encoder_args" : {
+        "-c:v": "libvpx-vp9",
+        "-crf": "30",
+        "-b:v": "2000k"
+    }
+}
+
+class TranscoderConfiguration:
     """
     transcoder configuration
     """
-    def __init__(self):
-        self.container_ext_by_config_name = {
-            "h264": ".mkv",
-            "hevc" : ".mkv",
-            "av1" : ".mkv",
-            "vp9" : ".webm"
-        }
+    YAMLTag = "!TranscoderConfiguration"
 
-        self.video_encoder_args_by_config = {
-            "h264" : " -c:v libx264 -crf 30 ",
-            "hevc" : " -c:v libx265 -crf 28 ",
-            "av1" : " -c:v libaom-av1 -crf 30 -b:v 2000k -strict experimental -row-mt 1 -tile-columns 4 -tile-rows 4 -threads 12",
-            "vp9" : " -c:v libvpx-vp9 -crf 30 -b:v 2000k "
-        }
-
+    def __init__(self, video_configs:dict = None):
+        # use default config if none specified
+        if video_configs is None:
+            self.video_configs = {
+                "h264": DEFAULT_H264_VIDEO_CONFIG,
+                "hevc" : DEFAULT_HEVC_VIDEO_CONFIG,
+                "av1" : DEFAULT_AV1_VIDEO_CONFIG,
+                "vp9" : DEFAULT_VP9_VIDEO_CONFIG
+            }
+        else:
+            self.video_configs = video_configs
 
     def get_container_ext(self, config_name:str) -> str:
         """
         return container extension based on config name
         """
-        return self.container_ext_by_config_name.get(config_name)
+        return self.video_configs.get(config_name).get("default_ext")
 
     def get_encoder_args(self, config_name:str) -> str:
         """
         return encoder args based on config name
         """
-        return self.video_encoder_args_by_config.get(config_name)
+        video_config_encoder_args = self.video_configs.get(config_name).get("encoder_args")
+        encoder_args = ""
+        for key, value in video_config_encoder_args.items():
+            encoder_args += key + " " + value + " "
+        return encoder_args
+
+    def as_dict(self):
+        """
+        return object as a dict
+        """
+        return dict(video_configs=self.video_configs)
+
+    def from_dict(self, config_dict:dict):
+        """
+        override config from dict
+        """
+        self.video_configs = config_dict["video_configs"]
+
+    @staticmethod
+    def to_yaml(dumper, data):
+        """
+        dump the file to yaml
+        """
+        return dumper.represent_mapping(data.YAMLTag, data.as_dict())
+
+    @staticmethod
+    def from_yaml(loader, node):
+        """
+        build a TranscoderConfiguration from a yml loader and node
+        """
+        node_map = loader.construct_mapping(node)
+        return TranscoderConfiguration(video_configs=node_map["video_configs"])
+
+yaml.add_representer(TranscoderConfiguration, TranscoderConfiguration.to_yaml, Dumper=yaml.SafeDumper)
+yaml.add_constructor(TranscoderConfiguration.YAMLTag, TranscoderConfiguration.from_yaml, Loader=yaml.SafeLoader)
 
 class TranscoderEncoderArgs:
     """
     transcoder encoder args
     """
-    def __init__(self, args: dict, config: TranscoderConfig):
+    def __init__(self, args: dict, config: TranscoderConfiguration):
         self.encoder_args = ""
         self.output_video_codec = "hevc"
 
@@ -485,11 +557,11 @@ class TranscoderArgs:
     """
     transcoder arguments and options
     """
-    def __init__(self, args, stdout=sys.stdout, stderr=sys.stderr):
+    def __init__(self, args, config:TranscoderConfiguration, stdout=sys.stdout, stderr=sys.stderr):
         self.args = args
 
         self.input_output_args = TranscoderInputOutputArgs(args)
-        self.config = TranscoderConfig()
+        self.config = config
         self.encoder_args = TranscoderEncoderArgs(args, self.config)
 
         self.stdout = stdout
@@ -853,6 +925,14 @@ def parse_args(argv):
     # general options
     parser.add_argument("--copy", default=False, dest="copy_others", action="store_true", help="copy hevc source files and other files")
 
+    # configuration
+    config_group = parser.add_argument_group('configuration')
+    config_group.add_argument("--output-yml-config", default=False, action="store_true", dest="output_yml_config", help="output yml default configuration")
+    config_group.add_argument("--output-json-config", default=False, action="store_true", dest="output_json_config", help="output json default configuration")
+    config_group.add_argument("--input-yml-config", type=str, default=None, dest="input_yml_config", help="input yml configuration from specified path")
+    config_group.add_argument("--input-json-config", type=str, default=None, dest="input_json_config", help="input json configuration from specified path")
+
+
     # io
     io_group = parser.add_argument_group('input/output options')
 
@@ -907,6 +987,40 @@ def parse_args(argv):
 
     return arguments
 
+def execute(args, cmd_stdout, cmd_stderr):
+    """
+    execute command with io
+    """
+
+    # configuration
+    config = TranscoderConfiguration()
+
+    if args.input_json_config is not None:
+        with open(args.input_json_config, "r") as json_file:
+            config_json = json.loads(json_file.read())
+            config.from_dict(config_json)
+
+    if args.input_yml_config is not None:
+        with open(args.input_yml_config, "r") as yml_file:
+            config = yaml.safe_load(yml_file.read())
+
+    if args.output_yml_config is True:
+        yml_config = yaml.safe_dump(config)
+        print(yml_config, file=cmd_stdout)
+        return
+
+    if args.output_json_config is True:
+        json_config = json.dumps(config.as_dict(), sort_keys=True, indent=4)
+        print(json_config, file=cmd_stdout)
+        return
+
+    # transcode
+    transcoder_args = TranscoderArgs(args, config, stdout = cmd_stdout, stderr = cmd_stderr)
+    transcode(transcoder_args, args.copy_others)
+
+    transcoder_results.print_summary(transcoder_args)
+
+
 def main(argv: list = None):
     """
     main function: argv is used for tests
@@ -925,18 +1039,11 @@ def main(argv: list = None):
     if args.output_dir is not None:
         os.makedirs(args.output_dir, exist_ok=True)
 
-    # transcode
     if args.stdout_path is not None and args.stderr_path is not None:
         with open(args.stdout_path, "w+") as cmd_stdout, open(args.stderr_path, "w+") as cmd_stderr:
-            transcoder_args = TranscoderArgs(args, stdout = cmd_stdout, stderr = cmd_stderr)
-            transcode(transcoder_args, args.copy_others)
-
-            transcoder_results.print_summary(transcoder_args)
+            execute(args, cmd_stdout, cmd_stderr)
     else:
-        transcoder_args = TranscoderArgs(args)
-        transcode(transcoder_args, args.copy_others)
-
-        transcoder_results.print_summary(transcoder_args)
+        execute(args, sys.stdout, sys.stderr) # pragma: no cover
 
     logging.info("Finished")
     close_logging(args)
