@@ -23,6 +23,16 @@ tabarnak won’t delete or clean up your files. It will skip files that are alre
 
 If you plan to use your media files with a chrome cast, be sure the buy **chromecast ultra** since the 3rd generation chromecast does not support HEVC.
 
+## Features
+
+* Easy to use out of the box
+  * input & output directory support
+  * keep relative path option for transcoding entire hierarchy of media files
+* Basic default configuration for basic codecs such as h264, hevc & vp9
+* Custom configuration workflow using either json or yaml
+* Configurable logging including basic [prometheus](https://prometheus.io/) support
+* Transcoder stats output (yaml)
+
 ## Usage
 
 ### Install
