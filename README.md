@@ -49,7 +49,7 @@ tabarnak -h
 tabarnak --input-dir . --output-dir output --h264
 
 #### transcode your entire music library recursively using opus codec in ogg container while keeping your directory structure and copy non media files
-tabarnak.py --copy --opus --keep-relative-path --output-dir your_output_dir
+tabarnak --copy --opus --keep-relative-path --output-dir your_output_dir
 
 
 ## Requirements
