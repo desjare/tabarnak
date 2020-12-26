@@ -49,8 +49,9 @@ tabarnak -h
 tabarnak --input-dir . --output-dir output --h264
 
 #### transcode your entire music library recursively using opus codec in ogg container while keeping your directory structure and copy non media files
-tabarnak --copy --opus --keep-relative-path --output-dir your_output_dir
+tabarnak --copy --opus --keep-relative-path --map-args "-map 0:0 " --output-dir your_output_dir
 
+Note that the mapping argument is necessary since iTunes files may contain unwanted tracks that prevent files to be recognised by music players.
 
 ## Requirements
 * [python3](https://www.python.org/) (tested with python 3.7 and 3.8)

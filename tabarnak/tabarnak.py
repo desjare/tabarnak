@@ -59,7 +59,7 @@ probe_duration_cmd = probe_cmd + ["-show_entries", "format=duration"] + probe_of
 
 # codec & configurations
 VIDEO_CODECS = ["hevc", "h264", "dvvideo", "mpeg4", "msmpeg4v3", "dnxhd", "vp8", "vp9"]
-AUDIO_CODECS = ["aac", "mp3", "alac", "vorbis", "opus", "flac", "pcm_s16le"]
+AUDIO_CODECS = ["aac", "mp3", "alac", "vorbis", "opus", "flac", "pcm_s16le", "pcm_s24le"]
 
 # extensions to ignore
 skip_ext = [".srt", ".jpg", ".txt", ".py", ".pyc"]
@@ -432,6 +432,12 @@ DEFAULT_OPUS_AUDIO_CONFIG = {
     }
 }
 
+DEFAULT_FLAC_AUDIO_CONFIG = {
+    "default_ext": ".flac",
+    "encoder_args" : {
+        "-c:a": "flac",
+    }
+}
 
 class TranscoderConfiguration:
     """
@@ -447,7 +453,8 @@ class TranscoderConfiguration:
                 "hevc" : DEFAULT_HEVC_VIDEO_CONFIG,
                 "av1" : DEFAULT_AV1_VIDEO_CONFIG,
                 "vp9" : DEFAULT_VP9_VIDEO_CONFIG,
-                "opus" : DEFAULT_OPUS_AUDIO_CONFIG
+                "opus" : DEFAULT_OPUS_AUDIO_CONFIG,
+                "flac" : DEFAULT_FLAC_AUDIO_CONFIG
             }
         else:
             self.configs = configs
@@ -998,6 +1005,7 @@ def parse_args(argv):
     config_group.add_argument("--av1", action="store_const", const="av1", dest="config_name", help="specify av1 codec")
     config_group.add_argument("--vp9", action="store_const", const="vp9", dest="config_name", help="specify vp9 codec")
     config_group.add_argument("--opus", action="store_const", const="opus", dest="config_name", help="specify opus codec")
+    config_group.add_argument("--flac", action="store_const", const="flac", dest="config_name", help="specify flac codec")
 
     if argv is not None:
         def error(message):
