@@ -189,6 +189,12 @@ class TrancodeFileResult:
                     exception=self.exceptions,
                     fails_on_tolerance=self.fails_on_tolerance)
 
+    def get_path(self) -> str:
+        """
+        returns the transcoding input path
+        """
+        return self.path
+
     def set_file_stats(self,transcoder_file_stats: TranscoderFileStats):
         """
         set stats for file transcoding
@@ -268,6 +274,12 @@ class TranscoderResults:
                 self.exception("%s:%s" % (exc_type, exc_value))
         # do not propagate exception
         return True
+
+    def get_elapsed_time(self) -> str:
+        """
+        returns elapsed time as a string
+        """
+        return str(datetime.datetime.now() - self.start_time)
 
     def set_file_result(self, file_result: TrancodeFileResult):
         """
@@ -374,7 +386,26 @@ class TranscoderResults:
         stdout = sys.stdout
         if transcoder_args:
             stdout = transcoder_args.stdout
-        summary = yaml.safe_dump(self)
+
+        num_success = 0
+        num_fails = 0
+        elapsed = self.get_elapsed_time()
+
+        error_input_paths = []
+        success_input_paths = []
+
+        for result in self.file_results:
+            if result.status() is True:
+                num_success += 1
+                success_input_paths.append(result.get_path())
+            else:
+                num_fails += 1
+                error_input_paths.append(result.get_path())
+
+        file_summary = "\n\nSuccesses:\n\n{0}\n\nFailures:\n\n{1}".format("\n".join(success_input_paths), "\n".join(error_input_paths))
+
+        summary = "\nSummary\n\nSuccesses:{0} Failures:{1}\nElapsed Time {2}\n{3}\n\nCheck logs for details.\n".format(num_success, num_fails, elapsed, file_summary)
+
         print(summary, file=stdout)
 
 yaml.add_representer(TranscoderResults, TranscoderResults.to_yaml, Dumper=yaml.SafeDumper)
